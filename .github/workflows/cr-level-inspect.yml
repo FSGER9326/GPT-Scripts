@@ -4,37 +4,31 @@ on:
     paths:
       - '.github/workflows/cr-level-inspect.yml'
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   inspect:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Inspect canonical archive
-        env:
-          SOURCE_URL: 'https://sdmntprwestus2.oaiusercontent.com/files/00000000-c2b8-81f8-a267-7f126c070860/raw?se=2026-09-21T23%3A18%3A17Z&sp=r&sv=2026-02-06&sr=b&scid=78fa4041-e093-57e6-93ae-763ccc073084&skoid=30ec2761-8f41-44db-b282-7a0f8809659b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T17%3A16%3A09Z&ske=2026-09-22T17%3A16%3A09Z&sks=b&skv=2026-02-06&sig=7IRbA87N%2BMcfIc2gg24oayLDi3sbLKzg97JrD66V3JY%3D'
+      - name: Download and inspect PWA12.104 canonical
+        shell: bash
         run: |
+          set -euo pipefail
+          curl -fL --retry 2 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-7d30-820b-bcb5-22ab42d3e6e9/raw?se=2026-09-21T23%3A19%3A44Z&sp=r&sv=2026-02-06&sr=b&scid=f84b07fb-4fb5-5fe4-a0ba-7f00356783c6&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A45%3A20Z&ske=2026-09-22T21%3A45%3A20Z&sks=b&skv=2026-02-06&sig=atcjQkWmR8c9SW/CnGJl9bOB%2BFwUFt65xtLztdYxeXc%3D' -o canonical.zip
+          unzip -q canonical.zip -d work
+          cd work/cr103
           python3 - <<'PY'
-          import os, re, urllib.request, zipfile, pathlib
-          url=os.environ['SOURCE_URL']
-          p='/tmp/canon.zip'
-          urllib.request.urlretrieve(url,p)
-          z=zipfile.ZipFile(p)
-          names=z.namelist()
-          print('ARCHIVE_COUNT',len(names))
-          print('=== PATHS ===')
-          path_re=re.compile(r'(combat|arena|street|district|map|mission|encounter|extract|level|tactical|world|path|nav)',re.I)
-          for n in [x for x in names if path_re.search(x)][:500]: print(n)
-          print('=== CONTENT HITS ===')
-          text_re=re.compile(r'\.(?:js|mjs|ts|json|html|css|md|txt)$',re.I)
-          hit_re=re.compile(r'(ARENA|arenaShape|blacksite|street clash|spawn|exfil|extraction|transparentObstacle|highGround|pathfind|line.of.sight|\bLOS\b|cover|hazard)',re.I)
-          out=0
-          for n in names:
-            if not text_re.search(n): continue
-            try: text=z.read(n).decode('utf-8','replace')
-            except: continue
-            lines=text.splitlines()
-            for i,line in enumerate(lines):
-              if hit_re.search(line):
-                print(f'{n}:{i+1}: {line[:600]}')
-                out+=1
-                if out>=700: raise SystemExit
+          import json
+          m=json.load(open('build-meta.json'))
+          print('BUILD_META',m)
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support'
           PY
+          echo '=== VARIABLE ARENAS FULL SOURCE ==='
+          cat src/missions/variable-arenas-v14.js
+          echo '=== LIVING STREETS UNDERGRID / ARENA SEAMS ==='
+          grep -n -E -C 14 'undergrid|tacticalShape|v134StreetArena|arenaShape|street.*arena|Street Clash' src/world/living-streets-v13-4a.js || true
+          echo '=== VARIABLE ARENA CSS RELEVANT ==='
+          grep -n -E -C 8 'arena|high|hazard|control|exfil|cover|obstacle' src/styles/26-v14-variable-arenas.css || true
+          echo '=== LEVEL TEST FILES ==='
+          ls tests | grep -E 'arena|street|district|infrastructure|bounds|blacksite|multi' | sort || true
