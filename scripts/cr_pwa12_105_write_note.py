@@ -1,0 +1,76 @@
+from pathlib import Path
+import json,sys
+root=Path(sys.argv[1]).resolve()
+meta=json.loads((root/'build-meta.json').read_text())
+note=f'''# Chrome Requiem PWA12.105 Faction Street Favors — Development Note
+
+## Baseline and scope
+
+The candidate was built from the explicit Google Drive canonical `14.0.0-pwa.12.104-street-contact-support`, not from a newer unpromoted specialist or integration branch. Canonical was not modified.
+
+Candidate version: `{meta['version']}`  
+Build hash: `{meta['buildHash']}`  
+Save schema: `{meta['schemaVersion']}` (unchanged)
+
+## Integrated improvement — physical Street Favors
+
+PWA12.104 already lets a trusted, physically authored local contact (Trust >= 20) warn/support the crew before a Street Clash. This candidate extends that existing relationship through the aftermath rather than adding an unrelated faction screen.
+
+A supported Street Clash victory banks one persistent one-use **Street Favor** with the supporting contact. The favor records its source clash, physical district, neighborhood, hostile faction, actor type, difficulty and earned day inside the already-persisted `Game.livingStreetsV134` object. The source mission ID is also recorded in a favor-history map so the same clash cannot create the favor twice. One pending favor per contact is allowed; later supported wins do not overwrite an existing debt.
+
+The favor appears directly in the contact dossier. Remote access shows the obligation but locks both actions. Resolution reuses the shipping `CR14MultiStageOperations.nearContact()` physical-location check, including its district-aware coordinate guard.
+
+The in-person player chooses one of two mutually exclusive outcomes:
+
+- **CALL IN COVER** consumes the favor and removes 12 neighborhood local heat plus 8 heat from the hostile faction tied to the source clash.
+- **TURN FAVOR INTO COUNTERMOVE** consumes the favor and creates a real optional bounty contract on that same contact's board, in the same physical district, against the source hostile faction. The new job uses ordinary mission rewards, sponsoring-contact faction reputation gain, target-faction reputation loss/heat, tactical staging and persistence.
+
+Contacts refuse to commission an open countermove against their own faction; cover remains available in that case. A lost Street Clash does not generate a favor. Existing PWA12.104 pre-combat warning/back-up behavior remains intact.
+
+## Save compatibility
+
+No new root save object and no schema bump were introduced. `contactFavors` and `contactFavorHistory` are additive maps lazy-initialized under `Game.livingStreetsV134`, which PWA12.104 already serializes/restores. Existing schema-14 states without either field initialize both safely. The generated countermove is an ordinary contact mission and therefore uses the existing contact-mission persistence path.
+
+## Verification performed
+
+The candidate pipeline is fail-fast: packaging only occurs after every command in the validation stage succeeds.
+
+Static/runtime checks executed:
+
+- `node --check src/runtime/runtime-bundle.js`
+- new PWA12.105 Street Favor contract test
+- inherited PWA12.104 street-contact support contract
+- inherited PWA12.83 street-aftermath contract
+- inherited PWA12.88 population-aftermath contract
+- inherited PWA12.98 physical-infrastructure-control contract
+- inherited PWA12.100 district-control effects contract
+- inherited PWA12.102 district-control preview contract
+- inherited PWA12.103 district-control context contract
+- PWA12.31 save-recovery contract
+- PWA12.62 safe-load-menu contract
+- PWA11 manifest contract
+- PWA11 service-worker test
+
+Browser integration checks executed in headless Chromium:
+
+- new PWA12.105 Street Favor integration at 412x915
+- inherited PWA12.67 physical intel-contact flow
+- inherited PWA12.49 operation routing
+- inherited PWA12.45 stage/extraction consequences
+
+The focused browser test verifies supported-victory award, source-id idempotency, real physical proximity, remote lock, both in-person choices, manual-slot save/load of the pending favor, exact Cover consequences, one-shot consumption, same-district countermove creation, ordinary faction consequences on that generated mission, generated-mission persistence, same-faction self-hit refusal, defeat not awarding a favor, additive-map initialization for older schema-14 state, and absence of browser page errors. It also produces a genuine 412x915 contact-dossier screenshot.
+
+## Files changed
+
+`src/world/living-streets-v13-4a.js` adds favor state, award/resolution rules, dossier card, countermove creation and the Street Clash success hook. `src/legacy/city-life-v13.js` adds one optional callback at the end of the existing dossier renderer so internal lexical dossier calls are decorated reliably. `src/runtime/runtime-bundle.js` is rebuilt from checked-in source markers. Build metadata, precache manifest, service worker and index version are regenerated by the existing build tool. Two focused PWA12.105 tests and one mobile QA capture are added.
+
+## Remaining risks
+
+Street Favor economy is deliberately capped at one pending favor per contact to prevent farming and dossier clutter; longer campaign balance should confirm whether that cap is too restrictive. Cover currently has fixed -12 local / -8 hostile-faction heat; a later tuning pass could scale those effects from contact Influence and territorial pressure rather than adding another currency. Countermove contracts deliberately inherit ordinary faction-reputation and heat rules for systemic consistency, but repeated use may accelerate faction polarization and needs campaign-length balance observation. PWA12.104 can theoretically select a supporter whose own faction matches the street target; this candidate prevents the incoherent self-hit follow-up, but a later loyalty pass may also constrain the original support selection.
+
+## Next faction-system priority
+
+**Territorial pressure at staging and extraction.** Reuse existing district controller, local heat, faction heat/reputation and physical infrastructure-control state to alter approach checkpoints and extraction options. Friendly controllers should unlock concrete routes/services; hostile high-heat controllers should impose patrols, checkpoint costs or extraction complications. These consequences should be visible before deployment and retain alternate player choices rather than merely increasing enemy HP.
+'''
+(root/'DEVELOPMENT_NOTE_PWA12_105_FACTION_STREET_FAVORS.md').write_text(note,encoding='utf-8')
+print(root/'DEVELOPMENT_NOTE_PWA12_105_FACTION_STREET_FAVORS.md')
