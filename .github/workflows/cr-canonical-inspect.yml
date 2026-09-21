@@ -8,25 +8,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Focused canonical inspection
+      - name: Inspect integration seams
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 3 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-9a48-820b-9968-24e7100dddba/raw?se=2026-09-21T23%3A09%3A40Z&sp=r&sv=2026-02-06&sr=b&scid=10015ac5-9512-5424-b5b4-b0c2702806e8&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T20%3A46%3A20Z&ske=2026-09-22T20%3A46%3A20Z&sks=b&skv=2026-02-06&sig=EafC4Bb1GNAb0d45gwVRC4YJCpe899%2BdTAr63mjXmbw%3D' -o canonical.zip
+          curl -fL --retry 3 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-3a0c-820b-81e7-9ca174a70d49/raw?se=2026-09-21T23%3A10%3A54Z&sp=r&sv=2026-02-06&sr=b&scid=8c2321cf-2462-5b5a-8b86-4884c6daf507&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T20%3A39%3A56Z&ske=2026-09-22T20%3A39%3A56Z&sks=b&skv=2026-02-06&sig=ITyiSTm2NJmmR1YYZoxV%2BI3ulmV8NMD2zurgAiVwyWM%3D' -o canonical.zip
           unzip -q canonical.zip -d canonical
           cd canonical/cr103
-          echo '=== BUILD META ==='; cat build-meta.json
-          echo '=== LIVING STATE ==='; sed -n '20,80p' src/world/living-streets-v13-4a.js
-          echo '=== STREET SUPPORT/SETTLEMENT ==='; sed -n '350,410p' src/world/living-streets-v13-4a.js
-          echo '=== STREET SERIALIZATION ==='; sed -n '530,565p' src/world/living-streets-v13-4a.js
-          echo '=== CONTACT DOSSIER HITS ==='; grep -nE 'renderContactDossierV13|contactTrustV13|changeContactTrustV13|contactRelations' src/legacy/city-life-v13.js | head -120
-          echo '=== CONTACT DOSSIER CONTEXT ==='
-          line=$(grep -n 'function renderContactDossierV13' src/legacy/city-life-v13.js | head -1 | cut -d: -f1 || true); if [ -n "$line" ]; then start=$((line-30)); [ "$start" -lt 1 ] && start=1; end=$((line+120)); sed -n "${start},${end}p" src/legacy/city-life-v13.js; fi
-          echo '=== MISSION SUCCESS/FAIL HITS ==='; grep -RniE --include='*.js' 'finalizeMissionSuccess|mission:success|factionRepGain|factionRepLoss|showDebriefV10|returnToOverworld=function|missionHistory' src/legacy src/missions | head -300
-          echo '=== CORE SUCCESS CONTEXT ==='
-          grep -nE 'finalizeMissionSuccess|function missionSuccess|factionRepGain|factionRepLoss' src/legacy/*.js | head -100
-          echo '=== BUILD TOOLS ==='; find tools -maxdepth 2 -type f -print | sort | head -120
-          echo '=== BUILDER KEY LINES ==='; grep -nE 'build-meta|runtime-bundle|SOURCE|version|hash|precache|service-worker|zip' tools/build_pwa11.py | head -220 || true
-          echo '=== RELEVANT TESTS ==='; find tests -maxdepth 1 -type f | grep -E 'pwa12_(82|83|86|88|90|94|98|100|102|103|104|39|56|62)|manifest|service_worker|service-worker|syntax' | sort
-          echo '=== PWA12.104 TEST ==='; cat tests/pwa12_104_street_contact_support_contract.py
-          echo '=== PWA12.103 TEST ==='; cat tests/pwa12_103_contextual_control_contract.py
+          echo '=== BUILDER HEAD ==='; sed -n '1,175p' tools/build_pwa11.py
+          echo '=== REBUNDLE ==='; cat tools/rebundle_runtime.py
+          echo '=== LIVING HEAD ==='; sed -n '1,25p' src/world/living-streets-v13-4a.js
+          echo '=== NEAR CONTACT ==='; grep -nE 'nearContact|contact.*distance|currentLocation' src/missions/multistage-operations-v14.js | head -80
+          echo '=== NEAR CONTACT CONTEXT ==='; line=$(grep -n 'function nearContact' src/missions/multistage-operations-v14.js | head -1 | cut -d: -f1 || true); if [ -n "$line" ]; then start=$((line-20)); end=$((line+55)); sed -n "${start},${end}p" src/missions/multistage-operations-v14.js; fi
+          echo '=== INDEX SCRIPT ORDER ==='; grep -nE '<script[^>]+src=' index.html | tail -90
+          echo '=== CURRENT RUNTIME INPUTS ==='; grep -nE 'living-streets|multistage|district-worlds|contract-approaches|city-life' tools/rebundle_runtime.py index.html
+          echo '=== TEST NAMES ==='; find tests -maxdepth 1 -type f -printf '%f\n' | sort | tail -160
