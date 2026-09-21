@@ -12,16 +12,41 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect PWA12.104 extraction, routing and elevation seams
+      - name: Retrieve verified PWA12.104 canonical
         shell: bash
         run: |
           set -euo pipefail
-          SOURCE_URL=$(grep -o "https://[^']*oaiusercontent.com[^']*" .github/workflows/cr-canonical-inspect.yml | head -n1)
-          test -n "$SOURCE_URL"
-          curl -fL --retry 2 "$SOURCE_URL" -o canonical.zip
+          ok=0
+          if curl -fL --retry 1 'https://drive.usercontent.google.com/download?id=1xVH-PyEtwwqUOK36vZ2TQDAiYrGhZqyk&export=download&confirm=t' -o canonical.zip; then
+            if unzip -p canonical.zip cr103/build-meta.json >/tmp/meta.json 2>/dev/null && python3 - <<'PY'
+          import json
+          m=json.load(open('/tmp/meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support'
+          assert m['buildHash']=='4313da4acd4c324a7672c36e'
+          PY
+            then ok=1; fi
+          fi
+          if [ "$ok" -ne 1 ]; then
+            rm -f canonical.zip
+            curl -fsSL 'https://raw.githubusercontent.com/FSGER9326/GPT-Scripts/main/.github/workflows/cr-canonical-inspect.yml' -o /tmp/canonical-workflow.yml
+            SOURCE_URL=$(grep -o "https://[^']*oaiusercontent.com[^']*" /tmp/canonical-workflow.yml | head -n1 || true)
+            test -n "$SOURCE_URL"
+            curl -fL --retry 2 "$SOURCE_URL" -o canonical.zip
+            unzip -p canonical.zip cr103/build-meta.json >/tmp/meta.json
+            python3 - <<'PY'
+          import json
+          m=json.load(open('/tmp/meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m
+          assert m['buildHash']=='4313da4acd4c324a7672c36e',m
+          print('VERIFIED_CANONICAL',m)
+          PY
+          fi
           unzip -q canonical.zip -d work
-          cd work/cr103
-          test "$(python3 -c "import json;print(json.load(open('build-meta.json'))['version'])")" = '14.0.0-pwa.12.104-street-contact-support'
+      - name: Inspect extraction, routing and elevation seams
+        working-directory: work/cr103
+        shell: bash
+        run: |
+          set -euo pipefail
           echo '=== CHECK WIN LOSE / EXFIL ==='
           grep -R -n -E -C 25 'function checkWinLose|checkWinLose *=|objective\.exfil|dataset\.exfil|exfil.*AP|EXFIL|PAYLOAD SECURED' src | head -n 1600 || true
           echo '=== LOS / PATH ==='
