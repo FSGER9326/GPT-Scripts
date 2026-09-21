@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -35,6 +35,7 @@ jobs:
           python3 - <<'PY'
           import json
           m=json.load(open('build-meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m
           assert m['buildHash']=='4313da4acd4c324a7672c36e',m
           assert m['schemaVersion']==14,m
           print('VERIFIED_CANONICAL',m)
@@ -49,31 +50,32 @@ jobs:
           cd "$ROOT"
           cp build-meta.json "$OUT/"
           mkdir -p "$OUT/src/world" "$OUT/src/legacy" "$OUT/src/runtime" "$OUT/src/bootstrap" "$OUT/src/missions" "$OUT/tests"
-          for f in \
-            src/world/district-worlds-v13-3.js \
-            src/world/living-streets-v13-4a.js \
-            src/legacy/city-life-v13.js \
-            src/bootstrap/module-manifest.js \
-            src/missions/contract-approaches-v13-4b.js; do
-            [ -f "$f" ] && cp "$f" "$OUT/$f"
-          done
+          for f in src/world/district-worlds-v13-3.js src/world/living-streets-v13-4a.js src/legacy/city-life-v13.js src/bootstrap/module-manifest.js src/missions/contract-approaches-v13-4b.js; do [ -f "$f" ] && cp "$f" "$OUT/$f"; done
           find src/runtime -maxdepth 1 -type f \( -name '*save*' -o -name '*persist*' -o -name '*state*' \) -exec cp {} "$OUT/src/runtime/" \; || true
           find tests -maxdepth 1 -type f | grep -Ei 'district|street|city|contact|route|operation|save|mobile|travel' | head -n 80 | xargs -r -I{} cp '{}' "$OUT/tests/"
           {
             echo '=== BUILD META ==='; cat build-meta.json
-            echo; echo '=== DISTRICT WORLD ROUTING/ARRIVAL ==='
-            grep -n -E -C 12 'pendingPath|findPath|routeTo|travelTo|transit|currentLocation|activeId|destination|arrival|visitLocation|location' src/world/district-worlds-v13-3.js || true
-            echo; echo '=== LIVING STREETS STATE/API ==='
-            grep -n -E -C 12 'livingStreetsV134|neighborhood|localHeat|security|gangPressure|unrest|prosperity|streetContracts|interactable|advance|time|day|contact' src/world/living-streets-v13-4a.js || true
-            echo; echo '=== CITY LOCATIONS/SERVICES ==='
-            grep -n -E -C 12 'V13_DISTRICT_LOCATIONS|visitLocationV13|renderLocationPanelV13|renderContactDossierV13|renderMarketV13|renderClinicV13|travelToDistrictV13|currentLocation|contract|credits|changeContactTrustV13' src/legacy/city-life-v13.js || true
-            echo; echo '=== CONTRACT APPROACH ROUTING ==='
-            grep -n -E -C 12 'pendingPath|route|staging|destination|location|travel' src/missions/contract-approaches-v13-4b.js || true
-            echo; echo '=== SAVE OWNERSHIP ==='
-            grep -R -n -E -C 8 'livingStreetsV134|districtWorldsV133|serialize|hydrate|saveGame|loadGame|schemaVersion' src/runtime src/world src/legacy || true
+            echo; echo '=== DISTRICT WORLD ROUTING/ARRIVAL ==='; grep -n -E -C 12 'pendingPath|findPath|routeTo|travelTo|transit|currentLocation|activeId|destination|arrival|visitLocation|location' src/world/district-worlds-v13-3.js || true
+            echo; echo '=== LIVING STREETS STATE/API ==='; grep -n -E -C 12 'livingStreetsV134|neighborhood|localHeat|security|gangPressure|unrest|prosperity|streetContracts|interactable|advance|time|day|contact' src/world/living-streets-v13-4a.js || true
+            echo; echo '=== CITY LOCATIONS/SERVICES ==='; grep -n -E -C 12 'V13_DISTRICT_LOCATIONS|visitLocationV13|renderLocationPanelV13|renderContactDossierV13|renderMarketV13|renderClinicV13|travelToDistrictV13|currentLocation|contract|credits|changeContactTrustV13' src/legacy/city-life-v13.js || true
+            echo; echo '=== CONTRACT APPROACH ROUTING ==='; grep -n -E -C 12 'pendingPath|route|staging|destination|location|travel' src/missions/contract-approaches-v13-4b.js || true
+            echo; echo '=== SAVE OWNERSHIP ==='; grep -R -n -E -C 8 'livingStreetsV134|districtWorldsV133|serialize|hydrate|saveGame|loadGame|schemaVersion' src/runtime src/world src/legacy || true
           } > "$OUT/CITY_SEAMS.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: cr-pwa12-104-city-seams
           path: out
           retention-days: 3
+      - name: Publish text seams into scratch repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="$GITHUB_WORKSPACE/analysis/cr-pwa12-104-city-seams"
+          rm -rf "$DEST"
+          mkdir -p "$DEST"
+          cp -R "$GITHUB_WORKSPACE/out/." "$DEST/"
+          git config user.name 'CR automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add analysis/cr-pwa12-104-city-seams
+          git commit -m 'Publish verified PWA12.104 city seams' || exit 0
+          git push origin HEAD:main
