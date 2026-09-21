@@ -8,13 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Inspect physical contact helper
+      - name: Inspect browser harness
         shell: bash
         run: |
           set -euo pipefail
           curl -fsSL 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-3a0c-820b-81e7-9ca174a70d49/raw?se=2026-09-21T23%3A10%3A54Z&sp=r&sv=2026-02-06&sr=b&scid=8c2321cf-2462-5b5a-8b86-4884c6daf507&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T20%3A39%3A56Z&ske=2026-09-22T20%3A39%3A56Z&sks=b&skv=2026-02-06&sig=ITyiSTm2NJmmR1YYZoxV%2BI3ulmV8NMD2zurgAiVwyWM%3D' -o canonical.zip
           unzip -q canonical.zip -d canonical
           cd canonical/cr103
-          sed -n '315,355p' src/missions/multistage-operations-v14.js
-          echo '=== browser tests ==='
-          find tests -maxdepth 1 -type f -printf '%f\n' | grep -Ei 'browser|playwright|contact|street|save|mission' | sort | tail -120 || true
+          cat tests/pwa12_67_intel_contact_browser.py
