@@ -1,0 +1,121 @@
+name: CR PWA12.134 Target Pressure Candidate
+
+on:
+  push:
+    branches: [cr-pwa12-134-target-pressure]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout candidate tooling
+        uses: actions/checkout@v4
+
+      - name: Download exact PWA12.133 combat baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work out
+          curl -fL --retry 3 'https://sdmntprsouthcentralus.oaiusercontent.com/files/00000000-07b8-81f7-bff6-47ca7fb20c47/raw?se=2026-09-21T23%3A35%3A34Z&sp=r&sv=2026-02-06&sr=b&scid=11131d6e-f17a-5ff3-b330-10a2c398d7a5&skoid=ec8eb293-a61a-47e0-abd0-6051cc94b050&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A58%3A04Z&ske=2026-09-22T21%3A58%3A04Z&sks=b&skv=2026-02-06&sig=lO%2BbxM6ct0A1KwB%2BAvGjWcyu9sOqk37Szbocpcopwek%3D' -o baseline.zip
+          unzip -q baseline.zip -d work
+          ROOT="$(find work -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$ROOT"
+          python3 - "$ROOT" <<'PY'
+          import json,sys
+          from pathlib import Path
+          root=Path(sys.argv[1])
+          meta=json.loads((root/'build-meta.json').read_text())
+          assert meta['version']=='14.0.0-pwa.12.133-bounded-contact-relay-candidate.01',meta
+          assert meta['schemaVersion']==14,meta
+          print('BASELINE',meta)
+          PY
+          echo "CR_ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Patch, rebundle and build candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_pwa12_134_target_pressure_patch.py "$CR_ROOT"
+          cp scripts/cr_pwa12_134_target_pressure_contract.py "$CR_ROOT/tests/pwa12_134_target_pressure_contract.py"
+          cp scripts/cr_pwa12_134_target_pressure_browser.py "$CR_ROOT/tests/pwa12_134_target_pressure_browser.py"
+          cd "$CR_ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.134-target-pressure-reservations-candidate.01'
+
+      - name: Prepare Chromium QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          PLAYWRIGHT_CHROMIUM=$(python3 -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()")
+          sudo ln -sf "$PLAYWRIGHT_CHROMIUM" /usr/bin/chromium
+
+      - name: Focused PWA12.134 combat verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CR_ROOT"
+          node --check src/runtime/runtime-bundle.js
+          python3 tests/pwa12_134_target_pressure_contract.py .
+          python3 tests/pwa12_134_target_pressure_browser.py .
+
+      - name: Inherited AI routing and bounded-knowledge regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CR_ROOT"
+          python3 tests/pwa12_133_bounded_contact_relay_browser.py
+          python3 tests/pwa12_116_coordinated_door_ai_browser.py
+          python3 tests/pwa12_117_hazard_route_ai_browser.py
+          python3 tests/pwa12_118_reachable_target_ai_browser.py
+          python3 tests/pwa12_120_retreat_door_ai_browser.py
+
+      - name: Combat session, suppression and frozen-world regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CR_ROOT"
+          python3 tests/pwa12_121_stale_enemy_session_browser.py
+          python3 tests/pwa12_122_combat_effect_session_contract.py
+          python3 tests/pwa12_122_combat_effect_session_browser.py
+          python3 tests/pwa12_123_mission_lifecycle_contract.py
+          python3 tests/pwa12_123_mission_lifecycle_browser.py
+          python3 tests/pwa12_124_suppression_contract.py
+          python3 tests/pwa12_124_suppression_ap_browser.py
+          python3 tests/world_freeze_browser.py
+
+      - name: Release preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CR_ROOT"
+          python3 tools/release_preflight.py
+
+      - name: Document and package candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_pwa12_134_write_note.py "$CR_ROOT"
+          cp "$CR_ROOT/DEVELOPMENT_NOTE_PWA12_134_TARGET_PRESSURE_RESERVATIONS.md" out/
+          cp "$CR_ROOT/qa/pwa12-134-target-pressure-mobile.png" out/
+          cp "$CR_ROOT/build-meta.json" out/BUILD_META.json
+          CANDIDATE='Chrome_Requiem_v14_PWA_pwa12_134_TARGET_PRESSURE_RESERVATIONS_CANDIDATE_01'
+          mv "$CR_ROOT" "work/$CANDIDATE"
+          cd work
+          zip -qr "../out/${CANDIDATE}_source.zip" "$CANDIDATE"
+          cd ..
+          sha256sum "out/${CANDIDATE}_source.zip" | tee out/SHA256.txt
+
+      - name: Upload candidate artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-PWA12-134-Target-Pressure
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
