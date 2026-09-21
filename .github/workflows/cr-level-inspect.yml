@@ -11,24 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Download and inspect PWA12.104 canonical
+      - uses: actions/checkout@v4
+      - name: Inspect PWA12.104 extraction, routing and elevation seams
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 2 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-7d30-820b-bcb5-22ab42d3e6e9/raw?se=2026-09-21T23%3A19%3A44Z&sp=r&sv=2026-02-06&sr=b&scid=f84b07fb-4fb5-5fe4-a0ba-7f00356783c6&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A45%3A20Z&ske=2026-09-22T21%3A45%3A20Z&sks=b&skv=2026-02-06&sig=atcjQkWmR8c9SW/CnGJl9bOB%2BFwUFt65xtLztdYxeXc%3D' -o canonical.zip
+          SOURCE_URL=$(grep -o "https://[^']*oaiusercontent.com[^']*" .github/workflows/cr-canonical-inspect.yml | head -n1)
+          test -n "$SOURCE_URL"
+          curl -fL --retry 2 "$SOURCE_URL" -o canonical.zip
           unzip -q canonical.zip -d work
           cd work/cr103
-          python3 - <<'PY'
-          import json
-          m=json.load(open('build-meta.json'))
-          print('BUILD_META',m)
-          assert m['version']=='14.0.0-pwa.12.104-street-contact-support'
-          PY
-          echo '=== VARIABLE ARENAS FULL SOURCE ==='
-          cat src/missions/variable-arenas-v14.js
-          echo '=== LIVING STREETS UNDERGRID / ARENA SEAMS ==='
-          grep -n -E -C 14 'undergrid|tacticalShape|v134StreetArena|arenaShape|street.*arena|Street Clash' src/world/living-streets-v13-4a.js || true
-          echo '=== VARIABLE ARENA CSS RELEVANT ==='
-          grep -n -E -C 8 'arena|high|hazard|control|exfil|cover|obstacle' src/styles/26-v14-variable-arenas.css || true
-          echo '=== LEVEL TEST FILES ==='
-          ls tests | grep -E 'arena|street|district|infrastructure|bounds|blacksite|multi' | sort || true
+          test "$(python3 -c "import json;print(json.load(open('build-meta.json'))['version'])")" = '14.0.0-pwa.12.104-street-contact-support'
+          echo '=== CHECK WIN LOSE / EXFIL ==='
+          grep -R -n -E -C 25 'function checkWinLose|checkWinLose *=|objective\.exfil|dataset\.exfil|exfil.*AP|EXFIL|PAYLOAD SECURED' src | head -n 1600 || true
+          echo '=== LOS / PATH ==='
+          grep -R -n -E -C 12 'function .*LOS|lineOfSight|hasLOS|transparentObstacle|findPath|pathfind|v12TopologyRevision|movementCache' src | head -n 1600 || true
+          echo '=== ELEVATION ==='
+          grep -R -n -E -C 8 'elevation|v12-high|high-ground' src | head -n 1000 || true
