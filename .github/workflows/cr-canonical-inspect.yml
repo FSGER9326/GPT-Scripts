@@ -1,18 +1,374 @@
-name: CR Canonical Inspect
+name: CR Faction Street Favor Candidate
 on:
   push:
     branches: [main]
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  inspect:
+  build-test-package:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
-      - name: Inspect browser harness
+      - name: Download explicit PWA12.104 canonical
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-3a0c-820b-81e7-9ca174a70d49/raw?se=2026-09-21T23%3A10%3A54Z&sp=r&sv=2026-02-06&sr=b&scid=8c2321cf-2462-5b5a-8b86-4884c6daf507&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T20%3A39%3A56Z&ske=2026-09-22T20%3A39%3A56Z&sks=b&skv=2026-02-06&sig=ITyiSTm2NJmmR1YYZoxV%2BI3ulmV8NMD2zurgAiVwyWM%3D' -o canonical.zip
-          unzip -q canonical.zip -d canonical
-          cd canonical/cr103
-          cat tests/pwa12_67_intel_contact_browser.py
+          curl -fL --retry 3 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-eedc-820b-9a2e-baa34d46b61e/raw?se=2026-09-21T23%3A14%3A06Z&sp=r&sv=2026-02-06&sr=b&scid=0f068529-9f06-578b-a8da-4f1ed8675d46&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A38%3A16Z&ske=2026-09-22T21%3A38%3A16Z&sks=b&skv=2026-02-06&sig=nY0bG2U6CsxAvIj3DuKcI2zGr9FZ0oGGcK9mtNnatRE%3D' -o canonical.zip
+          unzip -q canonical.zip -d work
+          test "$(python3 -c "import json;print(json.load(open('work/cr103/build-meta.json'))['version'])")" = '14.0.0-pwa.12.104-street-contact-support'
+          mkdir -p out
+      - name: Patch integrated street favor system
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('work/cr103')
+          p=root/'src/world/living-streets-v13-4a.js'
+          s=p.read_text(encoding='utf-8')
+          old="s.actorCooldown=s.actorCooldown||{};s.stats=s.stats||{events:0,interactions:0,patrolContacts:0,contracts:0,routes:0};s.streetContracts=s.streetContracts||[];"
+          new=old+"s.contactFavors=s.contactFavors||{};s.contactFavorHistory=s.contactFavorHistory||{};"
+          if old not in s: raise SystemExit('state seam missing')
+          s=s.replace(old,new,1)
+          anchor='window.streetContactSupportV134=streetContactSupportV134;\n'
+          feature=r'''
+
+          // PWA12.105 candidate — a local contact who materially supported a won Street Clash
+          // now owes one persistent, physical-location Street Favor. The crew must visit the
+          // contact to choose between suppressing the clash aftermath or converting the favor
+          // into a same-district countermove contract. No new save root/schema is required.
+          function streetFavorPresentV134(contactId){
+           const near=window.CR14MultiStageOperations?.nearContact;
+           return typeof near==='function' ? !!near(contactId) : false
+          }
+          window.streetFavorPresentV134=streetFavorPresentV134;
+
+          function streetFavorStateV134(contactId){return ensureLivingStreetsStateV134().contactFavors?.[contactId]||null}
+          window.streetFavorStateV134=streetFavorStateV134;
+
+          function contactDefForFavorV134(contactId){return (window.V13_CONTACTS||[]).find(c=>c.id===contactId)||Game.contacts?.find(c=>c.id===contactId)||null}
+          function favorDistrictLabelV134(id){return districtMetaV134(id)?.name||id||'the district'}
+
+          function awardStreetFavorV134(m){
+           if(!m?.v134StreetEncounter||!m.v134ContactSupport?.id)return false;
+           const s=ensureLivingStreetsStateV134(),contactId=m.v134ContactSupport.id;
+           if(s.contactFavorHistory[m.id])return false;
+           const rel=Game.contactRelations?.[contactId];
+           if(!rel?.known||Number(rel.trust||0)<20){s.contactFavorHistory[m.id]={contactId,status:'ineligible',day:Game.day};return false}
+           const record={contactId,sourceMissionId:m.id,district:m.sectorId,neighborhood:m.v134StreetNeighborhood||null,targetFaction:m.targetFaction||null,actorType:m.v134StreetActorType||'gang',sourceDiff:Number(m.diff||1),earnedDay:Game.day};
+           if(s.contactFavors[contactId]){
+            s.contactFavorHistory[m.id]={contactId,status:'overflow',day:Game.day};
+            return false
+           }
+           s.contactFavors[contactId]=record;
+           s.contactFavorHistory[m.id]={contactId,status:'banked',day:Game.day};
+           s.stats.streetFavorsEarned=(s.stats.streetFavorsEarned||0)+1;
+           const def=contactDefForFavorV134(contactId),target=window.FACTIONS?.[record.targetFaction];
+           addJournal?.('side','Street Favor Banked',`${def?.name||contactId} owes the crew a local favor after the clash in ${favorDistrictLabelV134(record.district)}. Visit them in person to call in cover or turn it into a countermove${target?` against ${target.name}`:''}.`);
+           return true
+          }
+          window.awardStreetFavorV134=awardStreetFavorV134;
+
+          function buildStreetFavorMissionV134(contactId,favor){
+           const contact=Game.contacts?.find(c=>c.id===contactId),def=contactDefForFavorV134(contactId);
+           if(!contact||!def||!favor?.targetFaction||def.faction===favor.targetFaction)return null;
+           const enemyMap={security:['Guard','Enforcer'],contractor:['Guard','Enforcer'],gang:['Raider','Enforcer'],hunter:['Enforcer','Sniper'],wraith:['Raider','Hacker']};
+           const diff=clampV134(Math.max(2,Number(favor.sourceDiff||1)+1),1,3),enemies=[...(enemyMap[favor.actorType]||['Guard','Enforcer'])];
+           if(diff>=3)enemies.push(favor.actorType==='hunter'?'Sniper':'Enforcer');
+           const target=window.FACTIONS?.[favor.targetFaction],shape=favor.actorType==='security'||favor.actorType==='contractor'?'checkpoint':favor.actorType==='hunter'?'alley':(['undergrid','floodline','dock_nine'].includes(favor.district)?'underpass':'alley');
+           return{id:`v134favor_${favor.sourceMissionId}`,contact:contactId,type:'bounty',objective:'bounty',name:`Countermove · ${favorDistrictLabelV134(favor.district)}`,desc:`${def.name} converts the crew's street favor into actionable work: hit ${target?.name||favor.targetFaction} on the same ground before their response hardens. The job is optional, physical, and carries ordinary faction reputation and heat consequences.`,enemies,diff,reward:360+diff*210,xp:100+diff*55,targetFaction:favor.targetFaction,factionRepGain:4+diff,factionRepLoss:{[favor.targetFaction]:-(4+diff)},sectorId:favor.district,tacticalShape:shape,v134StreetArena:shape,v134StreetFavorFollowUp:true,v134StreetFavorSource:favor.sourceMissionId,v134StreetNeighborhood:favor.neighborhood||null};
+          }
+          window.buildStreetFavorMissionV134=buildStreetFavorMissionV134;
+
+          function resolveStreetFavorV134(contactId,choice){
+           const s=ensureLivingStreetsStateV134(),favor=s.contactFavors?.[contactId];
+           if(!favor||Game.activeMission||!streetFavorPresentV134(contactId)||!['cover','countermove'].includes(choice))return false;
+           const def=contactDefForFavorV134(contactId),history=s.contactFavorHistory[favor.sourceMissionId]||{contactId};
+           if(choice==='countermove'){
+            const mission=buildStreetFavorMissionV134(contactId,favor),contact=Game.contacts?.find(c=>c.id===contactId);
+            if(!mission||!contact)return false;
+            const already=(Game.missionHistory||[]).some(m=>m.id===mission.id)||(Game.contacts||[]).some(c=>(c.missions||[]).some(m=>m.id===mission.id));
+            if(!already){contact.missions=contact.missions||[];contact.missions.unshift(mission)}
+            delete s.contactFavors[contactId];
+            s.contactFavorHistory[favor.sourceMissionId]={...history,status:'resolved',choice:'countermove',resolvedDay:Game.day,followUpMissionId:mission.id};
+            s.stats.streetFavorsSpent=(s.stats.streetFavorsSpent||0)+1;
+            addJournal?.('side','Street Favor · Countermove',`${def?.name||contactId} turned the favor into ${mission.name}, targeting ${window.FACTIONS?.[mission.targetFaction]?.name||mission.targetFaction} in ${favorDistrictLabelV134(mission.sectorId)}.`)
+           }else{
+            const world=currentWorldV134(),all=world?ensureNeighborhoodStateV134(world):null,h=(favor.neighborhood&&all?.[favor.neighborhood])||(world?currentNeighborhoodStateV134(world):null);
+            const beforeLocal=Number(h?.localHeat||0),beforeFaction=Number(Game.heat?.[favor.targetFaction]||0);
+            if(h){h.localHeat=clampV134(beforeLocal-12,0,100);h.events=(h.events||0)+1}
+            Game.heat=Game.heat&&typeof Game.heat==='object'?Game.heat:{};
+            if(favor.targetFaction)Game.heat[favor.targetFaction]=clampV134(beforeFaction-8,0,100);
+            delete s.contactFavors[contactId];
+            s.contactFavorHistory[favor.sourceMissionId]={...history,status:'resolved',choice:'cover',resolvedDay:Game.day,localHeatRemoved:beforeLocal-Number(h?.localHeat||0),factionHeatRemoved:beforeFaction-Number(Game.heat?.[favor.targetFaction]||0)};
+            s.stats.streetFavorsSpent=(s.stats.streetFavorsSpent||0)+1;
+            addJournal?.('side','Street Favor · Cover',`${def?.name||contactId} burned local influence to suppress the aftermath in ${favorDistrictLabelV134(favor.district)}. Street heat and ${window.FACTIONS?.[favor.targetFaction]?.short||favor.targetFaction||'target'} attention dropped.`)
+           }
+           updateNeighborhoodHUDV134();saveGame?.(0,true);
+           window.renderContactDossierV13?.(contactId);
+           return true
+          }
+          window.resolveStreetFavorV134=resolveStreetFavorV134;
+
+          function decorateStreetFavorDossierV134(contactId){
+           const host=document.getElementById('v13-contracts');if(!host)return;
+           host.querySelector('#v134-street-favor-card')?.remove();
+           const favor=streetFavorStateV134(contactId);if(!favor)return;
+           const def=contactDefForFavorV134(contactId),target=window.FACTIONS?.[favor.targetFaction],physical=streetFavorPresentV134(contactId),sameSide=!!def&&def.faction===favor.targetFaction;
+           const card=document.createElement('div');card.id='v134-street-favor-card';card.className='v13-side-card';card.style.cssText='--accent:#e4ad4c;border-left:3px solid var(--accent);margin-bottom:10px';
+           card.innerHTML=`<h4>STREET FAVOR // ${physical?'IN PERSON':'REMOTE LOCK'}</h4><p>${def?.name||contactId} backed the crew during the ${favorDistrictLabelV134(favor.district)} clash. This favor is one-use and tied to that physical district.</p><div class="v13-tagrow"><span>${target?.short||favor.targetFaction||'LOCAL'}</span><span>DAY ${favor.earnedDay}</span><span>${String(favor.actorType||'street').toUpperCase()}</span></div><div class="v13-actions" style="margin-top:8px"><button class="btn small" data-v134-favor="cover" ${physical?'':'disabled'}>CALL IN COVER · -12 LOCAL / -8 ${target?.short||'TARGET'} HEAT</button><button class="btn small" data-v134-favor="countermove" ${physical&&!sameSide?'':'disabled'}>TURN FAVOR INTO COUNTERMOVE</button></div><p style="opacity:.7;margin-top:6px">${!physical?`Travel to ${def?.name||'this contact'} and meet them physically to spend the favor.`:sameSide?`${def?.name||'This contact'} will hide the aftermath but will not openly commission a strike on their own faction.`:'Cover reduces immediate pursuit; countermove creates a real same-district contract with normal reputation and heat consequences.'}</p>`;
+           host.prepend(card);
+           card.querySelectorAll('[data-v134-favor]').forEach(b=>b.onclick=()=>resolveStreetFavorV134(contactId,b.dataset.v134Favor))
+          }
+          window.decorateStreetFavorDossierV134=decorateStreetFavorDossierV134;
+          '''
+          if anchor not in s: raise SystemExit('support anchor missing')
+          s=s.replace(anchor,anchor+feature,1)
+          hook="const relation=m.contact&&Game.contactRelations?.[m.contact];if(success&&relation?.known&&typeof changeContactTrustV13==='function')changeContactTrustV13(m.contact,1,'Won a street clash nearby');"
+          if hook not in s: raise SystemExit('settlement hook missing')
+          s=s.replace(hook,hook+"if(success)awardStreetFavorV134(m);",1)
+          p.write_text(s,encoding='utf-8')
+
+          cityp=root/'src/legacy/city-life-v13.js'
+          city=cityp.read_text(encoding='utf-8')
+          hook='\n}\nwindow.renderContactDossierV13=renderContactDossierV13;'
+          if city.count(hook)!=1: raise SystemExit(f'contact dossier hook count={city.count(hook)}')
+          city=city.replace(hook,'\n window.decorateStreetFavorDossierV134?.(id);'+hook,1)
+          cityp.write_text(city,encoding='utf-8')
+          PY
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.105-faction-street-favors'
+      - name: Add focused contracts and browser QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > work/cr103/tests/pwa12_105_street_favor_contract.py <<'PY'
+          from pathlib import Path
+          R=Path(__file__).resolve().parents[1]
+          src=(R/'src/world/living-streets-v13-4a.js').read_text(encoding='utf-8')
+          city=(R/'src/legacy/city-life-v13.js').read_text(encoding='utf-8')
+          bundle=(R/'src/runtime/runtime-bundle.js').read_text(encoding='utf-8')
+          for s in (src,bundle):
+              assert 's.contactFavors=s.contactFavors||{}' in s
+              assert 's.contactFavorHistory=s.contactFavorHistory||{}' in s
+              assert 'function awardStreetFavorV134' in s
+              assert 'function resolveStreetFavorV134' in s
+              assert 'window.CR14MultiStageOperations?.nearContact' in s
+              assert "choice==='countermove'" in s
+              assert 'v134StreetFavorFollowUp:true' in s
+              assert 'factionRepGain:4+diff' in s
+              assert "h.localHeat=clampV134(beforeLocal-12,0,100)" in s
+              assert "clampV134(beforeFaction-8,0,100)" in s
+              assert 'TURN FAVOR INTO COUNTERMOVE' in s
+          assert 'window.decorateStreetFavorDossierV134?.(id);' in city
+          assert 'window.decorateStreetFavorDossierV134?.(id);' in bundle
+          meta=__import__('json').loads((R/'build-meta.json').read_text())
+          assert meta['version']=='14.0.0-pwa.12.105-faction-street-favors'
+          assert meta['schemaVersion']==14
+          print('PWA12.105 faction street favor contract PASS')
+          PY
+          cat > work/cr103/tests/pwa12_105_street_favor_browser.py <<'PY'
+          """Browser integration for physical post-clash Street Favors."""
+          from pathlib import Path
+          import mimetypes
+          from playwright.sync_api import sync_playwright
+          ROOT=Path(__file__).resolve().parents[1]
+          (ROOT/'qa').mkdir(exist_ok=True)
+          HTML=(ROOT/'index.html').read_text().replace('bootChromeRequiemV14({registerPwa:true})','bootChromeRequiemV14({registerPwa:false})')
+          SHIM="""<script>const __s=new Map();const __ls={getItem:k=>__s.has(String(k))?__s.get(String(k)):null,setItem:(k,v)=>__s.set(String(k),String(v)),removeItem:k=>__s.delete(String(k)),clear:()=>__s.clear(),key:i=>[...__s.keys()][i]??null,get length(){return __s.size}};Object.defineProperty(window,'localStorage',{value:__ls,configurable:true});Object.defineProperty(window,'sessionStorage',{value:__ls,configurable:true});</script>"""
+          with sync_playwright() as pw:
+              browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+              ctx=browser.new_context(viewport={'width':412,'height':915})
+              errors=[]
+              def route(r):
+                  relative=r.request.url.split('http://cr.local/',1)[-1].split('?',1)[0] or 'index.html'
+                  path=ROOT/relative
+                  if path.is_file(): r.fulfill(status=200,body=path.read_bytes(),content_type=mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
+                  else: r.fulfill(status=404,body=b'not found')
+              ctx.route('http://cr.local/**',route)
+              page=ctx.new_page(); page.on('pageerror',lambda e:errors.append(str(e)))
+              page.set_content(HTML.replace('<head>','<head><base href="http://cr.local/">'+SHIM,1),wait_until='domcontentloaded')
+              page.wait_for_function('()=>!!window.ChromeRequiemV14Boot?.ready',timeout=45000)
+              setup=page.evaluate('''()=>{
+                startNewGame('Street Favor QA','Hacker','street');
+                document.getElementById('story-modal')?.classList.remove('open');
+                const c=Game.contacts[0],def=V13_CONTACTS.find(x=>x.id===c.id),target=Object.keys(FACTIONS).find(f=>f!==def.faction);
+                Game.contactRelations[c.id].known=true;Game.contactRelations[c.id].trust=50;Game.heat[target]=30;Game.activeMission=null;
+                const s=ensureLivingStreetsStateV134();s.contactFavors={};s.contactFavorHistory={};s.neighborhoods[def.sectorId]=s.neighborhoods[def.sectorId]||{};
+                s.neighborhoods[def.sectorId].favor_qa={id:'favor_qa',name:'Favor QA',security:2,prosperity:2,unrest:1,gangPressure:3,localHeat:20,secrets:0,controller:'local',events:0};
+                const m={id:'favor_source_alpha',name:'QA Street Clash',v134StreetEncounter:true,v134ContactSupport:{id:c.id,name:c.name,tier:2,label:'LOCAL BACKUP'},contact:c.id,sectorId:def.sectorId,v134StreetNeighborhood:'favor_qa',v134StreetActorType:'gang',targetFaction:target,diff:2};
+                settleStreetCombatV134(m,true);
+                Game.districtWorldsV133=Game.districtWorldsV133||{};Game.districtWorldsV133.activeId=def.sectorId;Game.ovPlayer={x:c.x,y:c.y};
+                renderContactDossierV13(c.id);showScreen('v13-contact-screen');
+                const favor=streetFavorStateV134(c.id),buttons=[...document.querySelectorAll('#v134-street-favor-card button')];
+                return{id:c.id,sector:def.sectorId,target,contactFaction:def.faction,source:m,near:CR14MultiStageOperations.nearContact(c.id),favor,buttons:buttons.length,enabled:buttons.filter(b=>!b.disabled).length,local:s.neighborhoods[def.sectorId].favor_qa.localHeat,targetHeat:Game.heat[target]};
+              }''')
+              assert setup['near'] and setup['favor']['sourceMissionId']=='favor_source_alpha',setup
+              assert setup['buttons']==2 and setup['enabled']==2,setup
+              assert setup['local']==28 and setup['targetHeat']==35,setup
+              # Awarding the same source again is idempotent at the favor layer.
+              duplicate=page.evaluate('m=>({again:awardStreetFavorV134(m),count:Object.keys(Game.livingStreetsV134.contactFavors).length,history:Object.keys(Game.livingStreetsV134.contactFavorHistory).length})',setup['source'])
+              assert duplicate=={'again':False,'count':1,'history':1},duplicate
+              page.screenshot(path=str(ROOT/'qa/pwa12-105-street-favor-mobile.png'),full_page=True)
+              # Slot save/load must restore the pending favor without a schema bump.
+              saved=page.evaluate('()=>saveGame(1,true)'); assert saved is True
+              restored=page.evaluate('''id=>{Game.livingStreetsV134.contactFavors={};const ok=loadGame(1);const c=Game.contacts.find(x=>x.id===id),def=V13_CONTACTS.find(x=>x.id===id);Game.districtWorldsV133.activeId=def.sectorId;Game.ovPlayer={x:c.x,y:c.y};renderContactDossierV13(id);return{ok,pending:!!streetFavorStateV134(id),near:CR14MultiStageOperations.nearContact(id)}}''',setup['id'])
+              assert restored=={'ok':True,'pending':True,'near':True},restored
+              # Remote dossiers expose the obligation but cannot spend it.
+              remote=page.evaluate('''id=>{Game.ovPlayer={x:-999,y:-999};renderContactDossierV13(id);const bs=[...document.querySelectorAll('#v134-street-favor-card button')];return{near:CR14MultiStageOperations.nearContact(id),buttons:bs.length,disabled:bs.filter(b=>b.disabled).length,direct:resolveStreetFavorV134(id,'cover'),pending:!!streetFavorStateV134(id)}}''',setup['id'])
+              assert remote=={'near':False,'buttons':2,'disabled':2,'direct':False,'pending':True},remote
+              # In person, cover burns exactly the advertised local/faction heat and consumes once.
+              cover=page.evaluate('''q=>{const c=Game.contacts.find(x=>x.id===q.id),def=V13_CONTACTS.find(x=>x.id===q.id);Game.districtWorldsV133.activeId=def.sectorId;Game.ovPlayer={x:c.x,y:c.y};const h=Game.livingStreetsV134.neighborhoods[q.sector].favor_qa,before=[h.localHeat,Game.heat[q.target]];const ok=resolveStreetFavorV134(q.id,'cover');return{ok,before,after:[h.localHeat,Game.heat[q.target]],pending:!!streetFavorStateV134(q.id),again:resolveStreetFavorV134(q.id,'cover')}}''',setup)
+              assert cover['ok'] and cover['before']==[28,35] and cover['after']==[16,27] and not cover['pending'] and cover['again'] is False,cover
+              # A later supported victory can instead be converted into a real same-district contract.
+              follow=page.evaluate('''q=>{const c=Game.contacts.find(x=>x.id===q.id),def=V13_CONTACTS.find(x=>x.id===q.id);const m={id:'favor_source_beta',name:'Second Clash',v134StreetEncounter:true,v134ContactSupport:{id:q.id,name:c.name,tier:2,label:'LOCAL BACKUP'},contact:q.id,sectorId:q.sector,v134StreetNeighborhood:'favor_qa',v134StreetActorType:'hunter',targetFaction:q.target,diff:2};settleStreetCombatV134(m,true);Game.districtWorldsV133.activeId=def.sectorId;Game.ovPlayer={x:c.x,y:c.y};const ok=resolveStreetFavorV134(q.id,'countermove');const job=c.missions.find(x=>x.v134StreetFavorFollowUp);return{ok,pending:!!streetFavorStateV134(q.id),job:job&&{id:job.id,sectorId:job.sectorId,targetFaction:job.targetFaction,contact:job.contact,diff:job.diff,reward:job.reward,repGain:job.factionRepGain,repLoss:job.factionRepLoss[q.target],source:job.v134StreetFavorSource}}}''',setup)
+              assert follow['ok'] and not follow['pending'],follow
+              assert follow['job']=={'id':'v134favor_favor_source_beta','sectorId':setup['sector'],'targetFaction':setup['target'],'contact':setup['id'],'diff':3,'reward':990,'repGain':7,'repLoss':-7,'source':'favor_source_beta'},follow
+              # Generated countermove survives ordinary contact/mission persistence.
+              persist=page.evaluate('''q=>{saveGame(2,true);const c=Game.contacts.find(x=>x.id===q.id);c.missions=c.missions.filter(m=>!m.v134StreetFavorFollowUp);const ok=loadGame(2);const restored=Game.contacts.find(x=>x.id===q.id).missions.find(m=>m.v134StreetFavorFollowUp);return{ok,restored:restored?.id||null,sector:restored?.sectorId||null}}''',setup)
+              assert persist=={'ok':True,'restored':'v134favor_favor_source_beta','sector':setup['sector']},persist
+              # Contacts will conceal aftermath for their own faction but will not commission an open self-hit.
+              same=page.evaluate('''q=>{const c=Game.contacts.find(x=>x.id===q.id),def=V13_CONTACTS.find(x=>x.id===q.id),s=ensureLivingStreetsStateV134();s.contactFavors[q.id]={contactId:q.id,sourceMissionId:'same_side',district:q.sector,neighborhood:'favor_qa',targetFaction:def.faction,actorType:'security',sourceDiff:2,earnedDay:Game.day};s.contactFavorHistory.same_side={contactId:q.id,status:'banked',day:Game.day};Game.districtWorldsV133.activeId=def.sectorId;Game.ovPlayer={x:c.x,y:c.y};renderContactDossierV13(q.id);const bs=[...document.querySelectorAll('#v134-street-favor-card button')];const counter=resolveStreetFavorV134(q.id,'countermove'),still=!!streetFavorStateV134(q.id),cover=resolveStreetFavorV134(q.id,'cover');return{buttons:bs.length,firstDisabled:bs[0].disabled,secondDisabled:bs[1].disabled,counter,still,cover,pending:!!streetFavorStateV134(q.id)}}''',setup)
+              assert same=={'buttons':2,'firstDisabled':False,'secondDisabled':True,'counter':False,'still':True,'cover':True,'pending':False},same
+              # Defeat never creates a favor.
+              defeat=page.evaluate('''q=>{const c=Game.contacts.find(x=>x.id===q.id);const m={id:'favor_source_loss',name:'Lost Clash',v134StreetEncounter:true,v134ContactSupport:{id:q.id,name:c.name,tier:2,label:'LOCAL BACKUP'},contact:q.id,sectorId:q.sector,v134StreetNeighborhood:'favor_qa',v134StreetActorType:'gang',targetFaction:q.target,diff:2};settleStreetCombatV134(m,false);return{pending:!!streetFavorStateV134(q.id),history:!!Game.livingStreetsV134.contactFavorHistory[m.id]}}''',setup)
+              assert defeat=={'pending':False,'history':False},defeat
+              # Pre-feature schema-14 living-streets payloads lazy-initialize the additive maps.
+              compat=page.evaluate('''()=>{const s=ensureLivingStreetsStateV134();delete s.contactFavors;delete s.contactFavorHistory;const again=ensureLivingStreetsStateV134();return{favors:typeof again.contactFavors==='object',history:typeof again.contactFavorHistory==='object'}}''')
+              assert compat=={'favors':True,'history':True},compat
+              assert not errors,errors
+              print('PASS PWA12.105 browser: physical favor, remote lock, cover choice, countermove mission, same-side guard, defeat guard, save/load, mobile UI')
+              ctx.close();browser.close()
+          PY
+      - name: Prepare Chromium QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install-deps chromium >/dev/null
+          python3 -m playwright install chromium >/dev/null
+          if [ ! -x /usr/bin/chromium ]; then
+            exe=$(python3 - <<'PY'
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p: print(p.chromium.executable_path)
+          PY
+            )
+            sudo ln -sf "$exe" /usr/bin/chromium
+          fi
+      - name: Static and inherited regression checks
+        working-directory: work/cr103
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check src/runtime/runtime-bundle.js
+          python3 tests/pwa12_105_street_favor_contract.py
+          python3 tests/pwa12_104_street_contact_support_contract.py
+          python3 tests/pwa12_83_street_aftermath_contract.py
+          python3 tests/pwa12_88_street_population_aftermath_contract.py
+          python3 tests/pwa12_98_physical_infrastructure_control_contract.py
+          python3 tests/pwa12_100_district_control_effect_contract.py
+          python3 tests/pwa12_102_district_control_preview_contract.py
+          python3 tests/pwa12_103_district_control_context_contract.py
+          python3 tests/pwa12_31_save_recovery_contract.py
+          python3 tests/pwa12_62_safe_load_menu_contract.py
+          python3 tests/pwa11_manifest_contract.py
+          node tests/pwa11_service_worker.test.mjs
+      - name: Browser integration and affected-flow regressions
+        working-directory: work/cr103
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/pwa12_105_street_favor_browser.py
+          python3 tests/pwa12_67_intel_contact_browser.py
+          python3 tests/pwa12_49_operation_routing_browser.py
+          python3 tests/pwa12_45_stage_consequences_browser.py
+      - name: Document and package candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib
+          root=Path('work/cr103');meta=json.loads((root/'build-meta.json').read_text())
+          note=f'''# Chrome Requiem PWA12.105 Faction Street Favors — Development Note
+
+## Baseline and scope
+- Explicit Drive canonical inspected and used as source: `14.0.0-pwa.12.104-street-contact-support`.
+- Candidate only. Canonical was not modified.
+- Candidate version: `{meta['version']}`.
+- Build hash: `{meta['buildHash']}`.
+- Save schema remains `{meta['schemaVersion']}`.
+
+## Integrated improvement: physical Street Favors
+PWA12.104 already lets a trusted contact (Trust >=20) physically authored in the current district warn the crew before a Street Clash. This candidate extends that existing relationship through the aftermath rather than adding an unrelated faction screen.
+
+A supported Street Clash victory banks one persistent one-use Street Favor with that supporting contact. The favor records its source clash, physical district, neighborhood, hostile faction, actor type, difficulty and earned day inside the already-persisted `Game.livingStreetsV134` object. The source mission ID is also recorded in a favor-history map so the same clash cannot create the favor twice. If the contact already owes a favor, later wins do not overwrite it.
+
+The favor appears directly in the contact dossier. Remote access shows the obligation but locks both actions. Resolution uses the shipping `CR14MultiStageOperations.nearContact()` physical-location check, including its district-aware coordinate guard.
+
+### Player choice
+1. **CALL IN COVER** — consumes the favor, removes 12 neighborhood local heat and 8 heat from the hostile faction tied to the source clash, then journals and saves the resolution.
+2. **TURN FAVOR INTO COUNTERMOVE** — consumes the favor and creates a real optional bounty contract on that same contact's board, in the same physical district, against the source hostile faction. It uses ordinary mission rewards, sponsoring-contact faction reputation gain, target-faction reputation loss/heat, tactical staging and persistence. Contacts refuse to commission an open countermove against their own faction; cover remains available in that case.
+
+A lost Street Clash does not generate a favor. Existing PWA12.104 pre-combat warning/back-up behavior remains unchanged.
+
+## Save compatibility
+No new root save object and no schema bump were introduced. `contactFavors` and `contactFavorHistory` are additive maps lazy-initialized under `Game.livingStreetsV134`, which PWA12.104 already serializes/restores. Existing schema-14 states without either field initialize both safely.
+
+The generated countermove is an ordinary contact mission and therefore uses the existing contact-mission persistence path.
+
+## Verification actually run
+The candidate workflow failed on any non-zero command, so every item below completed successfully before packaging:
+- `node --check src/runtime/runtime-bundle.js`
+- new `pwa12_105_street_favor_contract.py`
+- inherited PWA12.104 street-contact support contract
+- inherited PWA12.83 street aftermath contract
+- inherited PWA12.88 population-aftermath contract
+- inherited PWA12.98 physical infrastructure-control contract
+- inherited PWA12.100 district-control effects contract
+- inherited PWA12.102 district-control preview contract
+- inherited PWA12.103 district-control context contract
+- PWA12.31 save-recovery contract
+- PWA12.62 safe-load-menu contract
+- PWA11 manifest contract and service-worker test
+- new Chromium integration test at 412x915
+- inherited PWA12.67 physical intel-contact browser test
+- inherited PWA12.49 operation-routing browser test
+- inherited PWA12.45 stage-consequences browser test
+
+The new browser test verified: supported-victory award; one-favor/idempotent-source behavior; real physical proximity; two enabled in-person choices; remote lock; manual-slot save/load of the pending favor; exact cover consequences (post-clash local heat 28→16 and hostile heat 35→27); one-shot consumption; creation of `v134favor_favor_source_beta` with preserved district/contact/target and ordinary +7/-7 faction consequences; persistence of that generated contract; refusal to create a self-targeting countermove; defeat not awarding a favor; legacy additive-map initialization; no browser page errors; and the mobile dossier state screenshot.
+
+## Files changed
+- `src/world/living-streets-v13-4a.js` — favor state, award/resolution rules, contact-dossier card, countermove mission creation, Street Clash success hook.
+- `src/legacy/city-life-v13.js` — one optional callback at the end of the existing dossier renderer so internal/lexical dossier calls can be decorated reliably.
+- `src/runtime/runtime-bundle.js` — rebuilt from checked-in ordered source markers.
+- `build-meta.json`, `precache-manifest.js`, `service-worker.js`, `index.html` — regenerated/stamped by the existing build tool.
+- `tests/pwa12_105_street_favor_contract.py` and `tests/pwa12_105_street_favor_browser.py` — focused regression coverage.
+- `qa/pwa12-105-street-favor-mobile.png` — genuine headless-Chromium 412x915 capture from the tested state.
+
+## Remaining risks / design questions
+- Street Favor economy is deliberately capped at one pending favor per contact to prevent farming and UI clutter. Longer campaign balance should confirm whether this is too restrictive or exactly enough.
+- Cover currently has fixed -12 local / -8 target-faction heat values. Those should eventually respond to contact Influence and faction-control intensity rather than adding another currency.
+- Countermove contracts inherit ordinary faction reward/heat rules. This is intentional for systemic consistency, but repeated use could accelerate faction polarization faster than the base campaign; integration playtesting should inspect that curve.
+- A supporting contact from the same faction as the hostile street actor can still have helped in PWA12.104; this candidate handles the aftermath safely by allowing cover but disabling an incoherent self-hit countermove. A later faction-loyalty pass may want to constrain the original support selection itself.
+
+## Next faction-system priority
+**Faction territorial pressure at staging/extraction.** Use existing district controller, local heat, faction heat/reputation and physical infrastructure-control state to alter approach checkpoints and extraction options: friendly controllers should open concrete routes/services; hostile high-heat controllers should impose patrols, checkpoint costs or extraction complications. The key requirement is to expose those consequences before deployment and preserve alternate player choices rather than simply increasing enemy HP.
+'''
+          (root/'DEVELOPMENT_NOTE_PWA12_105_FACTION_STREET_FAVORS.md').write_text(note,encoding='utf-8')
+          PY
+          srcdir='Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01'
+          mv work/cr103 "work/$srcdir"
+          cp "work/$srcdir/DEVELOPMENT_NOTE_PWA12_105_FACTION_STREET_FAVORS.md" out/
+          cp "work/$srcdir/qa/pwa12-105-street-favor-mobile.png" out/
+          (cd work && zip -qr "../out/Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01_source.zip" "$srcdir")
+          sha256sum out/Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01_source.zip | tee out/SHA256.txt
+          cat "work/$srcdir/build-meta.json" | tee out/BUILD_META.json
+      - name: Upload candidate artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-PWA12-105-Faction-Street-Favors
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
