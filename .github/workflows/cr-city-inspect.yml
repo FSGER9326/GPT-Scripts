@@ -1,0 +1,70 @@
+name: CR City Inspect
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cr-city-inspect.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-city:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve verified PWA12.104 canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          ok=0
+          if curl -fL --retry 1 'https://drive.usercontent.google.com/download?id=1xVH-PyEtwwqUOK36vZ2TQDAiYrGhZqyk&export=download&confirm=t' -o canonical.zip; then
+            if unzip -p canonical.zip cr103/build-meta.json >/tmp/meta.json 2>/dev/null && python3 - <<'PY'
+          import json
+          m=json.load(open('/tmp/meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support'
+          assert m['buildHash']=='4313da4acd4c324a7672c36e'
+          print('VERIFIED_CANONICAL',m)
+          PY
+            then ok=1; fi
+          fi
+          if [ "$ok" -ne 1 ]; then
+            rm -f canonical.zip
+            curl -fsSL 'https://raw.githubusercontent.com/FSGER9326/GPT-Scripts/main/.github/workflows/cr-canonical-inspect.yml' -o /tmp/canonical-workflow.yml
+            SOURCE_URL=$(grep -o "https://[^']*oaiusercontent.com[^']*" /tmp/canonical-workflow.yml | head -n1 || true)
+            test -n "$SOURCE_URL"
+            curl -fL --retry 2 "$SOURCE_URL" -o canonical.zip
+            unzip -p canonical.zip cr103/build-meta.json >/tmp/meta.json
+            python3 - <<'PY'
+          import json
+          m=json.load(open('/tmp/meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m
+          assert m['buildHash']=='4313da4acd4c324a7672c36e',m
+          print('VERIFIED_CANONICAL_FALLBACK',m)
+          PY
+          fi
+          unzip -q canonical.zip -d work
+      - name: Inventory city architecture
+        working-directory: work/cr103
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== RELEVANT FILES ==='
+          find src tests -type f | grep -Ei 'district|street|city|travel|location|contact|encounter|mission|save|persist|route|map' | sort | head -n 700
+          echo '=== MODULE ORDER ==='
+          sed -n '1,260p' src/bootstrap/module-manifest.js
+          echo '=== DISTRICT WORLD CORE ==='
+          grep -n -E -C 8 'pendingPath|routeTo|travelTo|transit|location|currentLocation|activeId|findPath|pathTo|arrival|mega|map|sector' src/world/district-worlds-v13-3.js | head -n 2200 || true
+          echo '=== LIVING STREETS CORE ==='
+          grep -n -E -C 8 'streetContracts|encounter|neighborhood|localHeat|security|gangPressure|unrest|prosperity|contact|interactable|route|advance|step' src/world/living-streets-v13-4a.js | head -n 2600 || true
+          echo '=== CITY LIFE / LOCATIONS ==='
+          grep -n -E -C 8 'V13_DISTRICT_LOCATIONS|visitLocationV13|renderLocationPanelV13|renderContactDossierV13|renderMarketV13|renderClinicV13|travelToDistrictV13|currentLocation|contract|mission' src/legacy/city-life-v13.js | head -n 2600 || true
+          echo '=== CURRENT PWA12.104 CONTACT SUPPORT ==='
+          grep -R -n -E -C 10 'streetContactSupport|nearContact|LOCAL BACKUP|contact support|support contact' src tests | head -n 1800 || true
+          echo '=== PERSISTENCE OWNERSHIP ==='
+          grep -R -n -E -C 8 'livingStreetsV134|districtWorldsV133|serializeGame|hydrate|restore|schemaVersion|saveGame' src/runtime src/world src/legacy | head -n 2200 || true
+          echo '=== CITY TEST INVENTORY ==='
+          find tests -maxdepth 1 -type f | sort | grep -Ei 'district|street|city|contact|route|operation|save|mobile|travel' | head -n 500
