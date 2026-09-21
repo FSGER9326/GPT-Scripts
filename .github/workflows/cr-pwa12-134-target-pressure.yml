@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work out
-          curl -fL --retry 3 'https://sdmntprsouthcentralus.oaiusercontent.com/files/00000000-07b8-81f7-bff6-47ca7fb20c47/raw?se=2026-09-21T23%3A35%3A34Z&sp=r&sv=2026-02-06&sr=b&scid=11131d6e-f17a-5ff3-b330-10a2c398d7a5&skoid=ec8eb293-a61a-47e0-abd0-6051cc94b050&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A58%3A04Z&ske=2026-09-22T21%3A58%3A04Z&sks=b&skv=2026-02-06&sig=lO%2BbxM6ct0A1KwB%2BAvGjWcyu9sOqk37Szbocpcopwek%3D' -o baseline.zip
+          curl -fL --retry 3 'https://sdmntprsouthcentralus.oaiusercontent.com/files/00000000-3adc-81f7-8346-40b9ecfa6811/raw?se=2026-09-21T23%3A43%3A52Z&sp=r&sv=2026-02-06&sr=b&scid=ba25e783-3c56-5f76-97b8-5661ffecd40c&skoid=ec8eb293-a61a-47e0-abd0-6051cc94b050&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A29%3A11Z&ske=2026-09-22T23%3A29%3A11Z&sks=b&skv=2026-02-06&sig=XucxOJpC1YdjT8b3Zn/OcrNioWbqtY3v2ItMb8XoKnM%3D' -o baseline.zip
           unzip -q baseline.zip -d work
           ROOT="$(find work -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test -n "$ROOT"
