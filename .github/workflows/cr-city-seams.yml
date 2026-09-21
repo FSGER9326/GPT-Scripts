@@ -49,8 +49,10 @@ jobs:
           OUT="$GITHUB_WORKSPACE/out"
           cd "$ROOT"
           cp build-meta.json "$OUT/"
-          mkdir -p "$OUT/src/world" "$OUT/src/legacy" "$OUT/src/runtime" "$OUT/src/bootstrap" "$OUT/src/missions" "$OUT/tests"
+          cp index.html "$OUT/"
+          mkdir -p "$OUT/src/world" "$OUT/src/legacy" "$OUT/src/runtime" "$OUT/src/bootstrap" "$OUT/src/missions" "$OUT/tests" "$OUT/tools"
           for f in src/world/district-worlds-v13-3.js src/world/living-streets-v13-4a.js src/legacy/city-life-v13.js src/bootstrap/module-manifest.js src/missions/contract-approaches-v13-4b.js; do [ -f "$f" ] && cp "$f" "$OUT/$f"; done
+          for f in tools/rebundle_runtime.py tools/build_pwa11.py; do [ -f "$f" ] && cp "$f" "$OUT/$f"; done
           find src/runtime -maxdepth 1 -type f \( -name '*save*' -o -name '*persist*' -o -name '*state*' \) -exec cp {} "$OUT/src/runtime/" \; || true
           find tests -maxdepth 1 -type f | grep -Ei 'district|street|city|contact|route|operation|save|mobile|travel' | head -n 80 | xargs -r -I{} cp '{}' "$OUT/tests/"
           {
