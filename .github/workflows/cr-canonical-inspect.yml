@@ -1,0 +1,24 @@
+name: CR Canonical Inspect
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-0a00-820b-a45e-c91217c797cb/raw?se=2026-09-21T23%3A06%3A39Z&sp=r&sv=2026-02-06&sr=b&scid=a834d886-055a-59bb-a1b1-0ed5fb2a6a11&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A38%3A15Z&ske=2026-09-22T21%3A38%3A15Z&sks=b&skv=2026-02-06&sig=6RYeuxQOJW5ItKx6%2BqBtNPAau0I9SafBeeOWpzb1ejg%3D' -o canonical.zip
+          unzip -q canonical.zip -d canonical
+          echo '=== ROOT ==='
+          find canonical -maxdepth 2 -type f | sed 's#^canonical/##' | sort | head -300
+          echo '=== TARGET FILES ==='
+          find canonical -type f \( -name '*.js' -o -name '*.json' -o -name '*.html' -o -name '*.md' \) -print | grep -Ei 'faction|contact|mission|contract|district|save|persist|city|world|reputation|heat|extract|operation' | sed 's#^canonical/##' | head -300 || true
+          echo '=== SYMBOL HITS ==='
+          grep -RniE --include='*.js' --include='*.json' --include='*.html' --include='*.md' 'faction|reputation|contact|mission|contract|district control|districtControl|heat|extract|saveGame|loadGame|serialize|cityLife' canonical | head -1200 || true
+          echo '=== PACKAGE SCRIPTS ==='
+          find canonical -name package.json -maxdepth 5 -print -exec cat {} \; | head -500 || true
