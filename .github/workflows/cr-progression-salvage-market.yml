@@ -1,0 +1,159 @@
+name: CR Progression Salvage Market Candidate
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cr-progression-salvage-market.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct and verify exact PWA12.104 canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work out
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          test -n "$INNER"
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          test -n "$ROOT"
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build-meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m
+          assert m['buildHash']=='4313da4acd4c324a7672c36e',m
+          assert m['schemaVersion']==14,m
+          print('VERIFIED_CANONICAL',m)
+          PY
+          echo "ROOT=$PWD" >> "$GITHUB_ENV"
+
+      - name: Apply progression candidate and rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_pwa12_104_salvage_market_patch.py "$ROOT"
+          cp scripts/cr_pwa12_104_salvage_market_contract.py "$ROOT/tests/pwa12_104_salvage_market_contract.py"
+          cp scripts/cr_pwa12_104_salvage_market_browser.py "$ROOT/tests/pwa12_104_salvage_market_browser.py"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-salvage-market-candidate.01'
+          cp build-meta.json "$GITHUB_WORKSPACE/out/BUILD_META.json"
+
+      - name: Prepare Chromium QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          PLAYWRIGHT_CHROMIUM=$(python3 -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()")
+          sudo ln -sf "$PLAYWRIGHT_CHROMIUM" /usr/bin/chromium
+
+      - name: Static and persistence regressions
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            node --check src/runtime/runtime-bundle.js
+            python3 tests/pwa12_104_salvage_market_contract.py .
+            python3 tests/pwa12_104_street_contact_support_contract.py
+            python3 tests/pwa12_31_save_recovery_contract.py
+            python3 tests/pwa12_62_safe_load_menu_contract.py
+            python3 tests/pwa11_manifest_contract.py
+            node tests/pwa11_service_worker.test.mjs
+          } 2>&1 | tee "$GITHUB_WORKSPACE/out/static-regression.log"
+
+      - name: Pixel 7 integration and affected-flow regressions
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            python3 tests/pwa12_104_salvage_market_browser.py .
+            python3 tests/pwa12_54_progressed_campaign_browser.py
+            python3 tests/pwa12_45_stage_consequences_browser.py
+            python3 tests/pwa12_49_operation_routing_browser.py
+          } 2>&1 | tee "$GITHUB_WORKSPACE/out/browser-regression.log"
+
+      - name: Document, package, and publish report
+        shell: bash
+        run: |
+          set -euo pipefail
+          META=$(cat "$ROOT/build-meta.json")
+          cat > "$ROOT/DEVELOPMENT_NOTE_PWA12_104_SALVAGE_MARKET_CANDIDATE_01.md" <<EOF
+          # Chrome Requiem PWA12.104 Salvage Market Candidate 01
+
+          ## Baseline
+          Reconstructed and hash-verified against canonical `14.0.0-pwa.12.104-street-contact-support` / `4313da4acd4c324a7672c36e` before any edits. Canonical was not modified.
+
+          ## Implemented
+          - Replaced broad automatic manufacturer loot with a deterministic field-salvage intake that is idempotent by mission id.
+          - Successful eligible operations can produce a manufacturer/district-provenance weapon or attachment recovery.
+          - Recovery condition affects only economy, never combat stats. Pending salvage offers KEEP, SELL, or STRIP.
+          - KEEP adds the existing canonical weapon to shared stash without auto-equipping, or adds an attachment copy to the armory.
+          - SELL converts the recovery into a bounded fraction of its base value.
+          - STRIP converts it into the existing salvage resource used by equipment maintenance, closing the mission-loot -> repair loop.
+          - Added visible local-industry supply discounts and imported-goods premiums to city markets using existing district industry data.
+          - Rare-stock purchases now consume that one limited entry instead of remaining infinitely purchasable for the day.
+          - Added safehouse Salvage Intake UI and mobile-responsive controls.
+
+          ## Persistence
+          Salvage-exchange state lives additively inside existing `companyV135`, which is already serialized wholesale. Missing state defaults on load, so save schema remains 14 and older saves do not require destructive migration.
+
+          ## Verification
+          The workflow first reconstructed canonical and asserted its exact recorded build hash. It then rebuilt this candidate and ran JavaScript syntax validation, the focused source contract, canonical save-recovery/load-menu/PWA contracts, a Pixel 7 browser integration covering KEEP/SELL/STRIP, pending-save restoration, synthetic old-save default migration, weapon swap, attachment install/remove, combat-unit stat bridging, strip-to-maintenance repair spending, local/import market supply, one-shot rare stock, and inherited progressed-campaign/stage/routing browser regressions. See `static-regression.log` and `browser-regression.log` for exact executed output.
+
+          ## Balance risks
+          The recovery frequency and resale/strip coefficients are first-pass economy tuning. Local/import price modifiers are deliberately modest because reputation, district wealth, and heat already modify prices. The implementation avoids random stat quality tiers; all kept gear retains its canonical item stats.
+
+          ## Next progression priority
+          Add equipment specialization through workshop services (calibration/refit choices with reversible trade-offs) or consumable field loadout limits, after campaign-scale telemetry establishes whether salvage inflow is sustaining maintenance without trivializing cash flow.
+
+          ## Build meta
+          \`\`\`json
+          $META
+          \`\`\`
+          EOF
+          cp "$ROOT/DEVELOPMENT_NOTE_PWA12_104_SALVAGE_MARKET_CANDIDATE_01.md" out/
+          cp "$ROOT/qa/pwa12-104-salvage-market-mobile.png" out/
+          CANDIDATE='Chrome_Requiem_v14_PWA_pwa12_104_SALVAGE_MARKET_CANDIDATE_01'
+          mv "$ROOT" "$GITHUB_WORKSPACE/work/$CANDIDATE"
+          cd "$GITHUB_WORKSPACE/work"
+          zip -qr "$GITHUB_WORKSPACE/out/${CANDIDATE}_source.zip" "$CANDIDATE"
+          cd "$GITHUB_WORKSPACE"
+          sha256sum "out/${CANDIDATE}_source.zip" | tee out/SHA256.txt
+          DEST="$GITHUB_WORKSPACE/analysis/cr-pwa12-104-salvage-market-candidate-01"
+          rm -rf "$DEST" && mkdir -p "$DEST"
+          cp out/BUILD_META.json out/DEVELOPMENT_NOTE_PWA12_104_SALVAGE_MARKET_CANDIDATE_01.md out/static-regression.log out/browser-regression.log out/SHA256.txt "$DEST/"
+          cp out/pwa12-104-salvage-market-mobile.png "$DEST/"
+          git config user.name 'CR progression automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add analysis/cr-pwa12-104-salvage-market-candidate-01
+          git commit -m 'Publish PWA12.104 salvage market candidate QA' || true
+          git push origin HEAD:main
+
+      - name: Upload candidate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-PWA12-104-Salvage-Market-Candidate-01
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
