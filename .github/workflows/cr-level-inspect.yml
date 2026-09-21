@@ -1,0 +1,40 @@
+name: CR Level Inspect
+on:
+  push:
+    paths:
+      - '.github/workflows/cr-level-inspect.yml'
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect canonical archive
+        env:
+          SOURCE_URL: 'https://sdmntprwestus2.oaiusercontent.com/files/00000000-c2b8-81f8-a267-7f126c070860/raw?se=2026-09-21T23%3A18%3A17Z&sp=r&sv=2026-02-06&sr=b&scid=78fa4041-e093-57e6-93ae-763ccc073084&skoid=30ec2761-8f41-44db-b282-7a0f8809659b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T17%3A16%3A09Z&ske=2026-09-22T17%3A16%3A09Z&sks=b&skv=2026-02-06&sig=7IRbA87N%2BMcfIc2gg24oayLDi3sbLKzg97JrD66V3JY%3D'
+        run: |
+          python3 - <<'PY'
+          import os, re, urllib.request, zipfile, pathlib
+          url=os.environ['SOURCE_URL']
+          p='/tmp/canon.zip'
+          urllib.request.urlretrieve(url,p)
+          z=zipfile.ZipFile(p)
+          names=z.namelist()
+          print('ARCHIVE_COUNT',len(names))
+          print('=== PATHS ===')
+          path_re=re.compile(r'(combat|arena|street|district|map|mission|encounter|extract|level|tactical|world|path|nav)',re.I)
+          for n in [x for x in names if path_re.search(x)][:500]: print(n)
+          print('=== CONTENT HITS ===')
+          text_re=re.compile(r'\.(?:js|mjs|ts|json|html|css|md|txt)$',re.I)
+          hit_re=re.compile(r'(ARENA|arenaShape|blacksite|street clash|spawn|exfil|extraction|transparentObstacle|highGround|pathfind|line.of.sight|\bLOS\b|cover|hazard)',re.I)
+          out=0
+          for n in names:
+            if not text_re.search(n): continue
+            try: text=z.read(n).decode('utf-8','replace')
+            except: continue
+            lines=text.splitlines()
+            for i,line in enumerate(lines):
+              if hit_re.search(line):
+                print(f'{n}:{i+1}: {line[:600]}')
+                out+=1
+                if out>=700: raise SystemExit
+          PY
