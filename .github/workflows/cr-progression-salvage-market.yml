@@ -43,7 +43,10 @@ jobs:
           assert m['schemaVersion']==14,m
           print('VERIFIED_CANONICAL',m)
           PY
-          echo "ROOT=$PWD" >> "$GITHUB_ENV"
+          cd "$GITHUB_WORKSPACE"
+          cp -a "$ROOT" baseline-pwa12-104
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+          echo "BASELINE_ROOT=$GITHUB_WORKSPACE/baseline-pwa12-104" >> "$GITHUB_ENV"
 
       - name: Apply progression candidate and rebuild
         shell: bash
@@ -81,6 +84,34 @@ jobs:
             node tests/pwa11_service_worker.test.mjs
           } 2>&1 | tee "$GITHUB_WORKSPACE/out/static-regression.log"
 
+      - name: Controlled progressed-campaign persistence comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          (cd "$BASELINE_ROOT" && python3 tests/pwa12_54_progressed_campaign_browser.py) > out/baseline-progressed-campaign.log 2>&1
+          BASE_RC=$?
+          (cd "$ROOT" && python3 tests/pwa12_54_progressed_campaign_browser.py) > out/candidate-progressed-campaign.log 2>&1
+          CAND_RC=$?
+          set -e
+          echo "baseline_rc=$BASE_RC candidate_rc=$CAND_RC" | tee out/progressed-campaign-control.log
+          cat out/baseline-progressed-campaign.log >> out/progressed-campaign-control.log
+          echo '--- candidate ---' >> out/progressed-campaign-control.log
+          cat out/candidate-progressed-campaign.log >> out/progressed-campaign-control.log
+          if [ "$BASE_RC" -eq 0 ] && [ "$CAND_RC" -ne 0 ]; then
+            echo 'REGRESSION: candidate fails a persistence test that canonical passes' >&2
+            exit 1
+          fi
+          if [ "$BASE_RC" -ne 0 ]; then
+            [ "$CAND_RC" -ne 0 ] || { echo 'candidate unexpectedly changes baseline test behavior'; exit 1; }
+            BASE_MSG=$(grep -F 'durable save/load mismatches:' out/baseline-progressed-campaign.log | tail -n1 || true)
+            CAND_MSG=$(grep -F 'durable save/load mismatches:' out/candidate-progressed-campaign.log | tail -n1 || true)
+            [ -n "$BASE_MSG" ] && [ "$BASE_MSG" = "$CAND_MSG" ] || { echo 'baseline/candidate persistence failures differ' >&2; exit 1; }
+            echo "CONTROLLED PRE-EXISTING FAILURE: $BASE_MSG" | tee -a out/progressed-campaign-control.log
+          else
+            echo 'PASS canonical and candidate progressed-campaign persistence control' | tee -a out/progressed-campaign-control.log
+          fi
+
       - name: Pixel 7 integration and affected-flow regressions
         working-directory: ${{ env.ROOT }}
         shell: bash
@@ -88,9 +119,9 @@ jobs:
           set -euo pipefail
           {
             python3 tests/pwa12_104_salvage_market_browser.py .
-            python3 tests/pwa12_54_progressed_campaign_browser.py
             python3 tests/pwa12_45_stage_consequences_browser.py
             python3 tests/pwa12_49_operation_routing_browser.py
+            python3 tests/pwa12_67_architecture_browser.py
           } 2>&1 | tee "$GITHUB_WORKSPACE/out/browser-regression.log"
 
       - name: Document, package, and publish report
@@ -98,6 +129,7 @@ jobs:
         run: |
           set -euo pipefail
           META=$(cat "$ROOT/build-meta.json")
+          CONTROL=$(tail -n1 out/progressed-campaign-control.log)
           cat > "$ROOT/DEVELOPMENT_NOTE_PWA12_104_SALVAGE_MARKET_CANDIDATE_01.md" <<EOF
           # Chrome Requiem PWA12.104 Salvage Market Candidate 01
 
@@ -119,7 +151,11 @@ jobs:
           Salvage-exchange state lives additively inside existing `companyV135`, which is already serialized wholesale. Missing state defaults on load, so save schema remains 14 and older saves do not require destructive migration.
 
           ## Verification
-          The workflow first reconstructed canonical and asserted its exact recorded build hash. It then rebuilt this candidate and ran JavaScript syntax validation, the focused source contract, canonical save-recovery/load-menu/PWA contracts, a Pixel 7 browser integration covering KEEP/SELL/STRIP, pending-save restoration, synthetic old-save default migration, weapon swap, attachment install/remove, combat-unit stat bridging, strip-to-maintenance repair spending, local/import market supply, one-shot rare stock, and inherited progressed-campaign/stage/routing browser regressions. See `static-regression.log` and `browser-regression.log` for exact executed output.
+          The workflow first reconstructed canonical and asserted its exact recorded build hash. It then rebuilt this candidate and ran JavaScript syntax validation, the focused source contract, canonical save-recovery/load-menu/PWA contracts, a Pixel 7 browser integration covering KEEP/SELL/STRIP, pending-save restoration, synthetic old-save default migration, weapon swap, attachment install/remove, combat-unit stat bridging, strip-to-maintenance repair spending, local/import market supply, one-shot rare stock, and inherited stage/routing/architecture browser regressions.
+
+          The legacy PWA12.54 progressed-campaign equivalence test was also executed as an A/B control against untouched canonical and the candidate. Result: $CONTROL. This is treated as pre-existing only when canonical and candidate produce the identical mismatch set; see `progressed-campaign-control.log`.
+
+          See `static-regression.log`, `browser-regression.log`, and `progressed-campaign-control.log` for exact executed output.
 
           ## Balance risks
           The recovery frequency and resale/strip coefficients are first-pass economy tuning. Local/import price modifiers are deliberately modest because reputation, district wealth, and heat already modify prices. The implementation avoids random stat quality tiers; all kept gear retains its canonical item stats.
@@ -142,7 +178,7 @@ jobs:
           sha256sum "out/${CANDIDATE}_source.zip" | tee out/SHA256.txt
           DEST="$GITHUB_WORKSPACE/analysis/cr-pwa12-104-salvage-market-candidate-01"
           rm -rf "$DEST" && mkdir -p "$DEST"
-          cp out/BUILD_META.json out/DEVELOPMENT_NOTE_PWA12_104_SALVAGE_MARKET_CANDIDATE_01.md out/static-regression.log out/browser-regression.log out/SHA256.txt "$DEST/"
+          cp out/BUILD_META.json out/DEVELOPMENT_NOTE_PWA12_104_SALVAGE_MARKET_CANDIDATE_01.md out/static-regression.log out/browser-regression.log out/progressed-campaign-control.log out/SHA256.txt "$DEST/"
           cp out/pwa12-104-salvage-market-mobile.png "$DEST/"
           git config user.name 'CR progression automation'
           git config user.email 'actions@users.noreply.github.com'
