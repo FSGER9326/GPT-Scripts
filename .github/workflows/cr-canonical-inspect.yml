@@ -8,17 +8,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Download canonical
+      - name: Focused canonical inspection
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 3 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-0a00-820b-a45e-c91217c797cb/raw?se=2026-09-21T23%3A06%3A39Z&sp=r&sv=2026-02-06&sr=b&scid=a834d886-055a-59bb-a1b1-0ed5fb2a6a11&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A38%3A15Z&ske=2026-09-22T21%3A38%3A15Z&sks=b&skv=2026-02-06&sig=6RYeuxQOJW5ItKx6%2BqBtNPAau0I9SafBeeOWpzb1ejg%3D' -o canonical.zip
+          curl -fL --retry 3 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-9a48-820b-9968-24e7100dddba/raw?se=2026-09-21T23%3A09%3A40Z&sp=r&sv=2026-02-06&sr=b&scid=10015ac5-9512-5424-b5b4-b0c2702806e8&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T20%3A46%3A20Z&ske=2026-09-22T20%3A46%3A20Z&sks=b&skv=2026-02-06&sig=EafC4Bb1GNAb0d45gwVRC4YJCpe899%2BdTAr63mjXmbw%3D' -o canonical.zip
           unzip -q canonical.zip -d canonical
-          echo '=== ROOT ==='
-          find canonical -maxdepth 2 -type f | sed 's#^canonical/##' | sort | head -300
-          echo '=== TARGET FILES ==='
-          find canonical -type f \( -name '*.js' -o -name '*.json' -o -name '*.html' -o -name '*.md' \) -print | grep -Ei 'faction|contact|mission|contract|district|save|persist|city|world|reputation|heat|extract|operation' | sed 's#^canonical/##' | head -300 || true
-          echo '=== SYMBOL HITS ==='
-          grep -RniE --include='*.js' --include='*.json' --include='*.html' --include='*.md' 'faction|reputation|contact|mission|contract|district control|districtControl|heat|extract|saveGame|loadGame|serialize|cityLife' canonical | head -1200 || true
-          echo '=== PACKAGE SCRIPTS ==='
-          find canonical -name package.json -maxdepth 5 -print -exec cat {} \; | head -500 || true
+          cd canonical/cr103
+          echo '=== BUILD META ==='; cat build-meta.json
+          echo '=== LIVING STATE ==='; sed -n '20,80p' src/world/living-streets-v13-4a.js
+          echo '=== STREET SUPPORT/SETTLEMENT ==='; sed -n '350,410p' src/world/living-streets-v13-4a.js
+          echo '=== STREET SERIALIZATION ==='; sed -n '530,565p' src/world/living-streets-v13-4a.js
+          echo '=== CONTACT DOSSIER HITS ==='; grep -nE 'renderContactDossierV13|contactTrustV13|changeContactTrustV13|contactRelations' src/legacy/city-life-v13.js | head -120
+          echo '=== CONTACT DOSSIER CONTEXT ==='
+          line=$(grep -n 'function renderContactDossierV13' src/legacy/city-life-v13.js | head -1 | cut -d: -f1 || true); if [ -n "$line" ]; then start=$((line-30)); [ "$start" -lt 1 ] && start=1; end=$((line+120)); sed -n "${start},${end}p" src/legacy/city-life-v13.js; fi
+          echo '=== MISSION SUCCESS/FAIL HITS ==='; grep -RniE --include='*.js' 'finalizeMissionSuccess|mission:success|factionRepGain|factionRepLoss|showDebriefV10|returnToOverworld=function|missionHistory' src/legacy src/missions | head -300
+          echo '=== CORE SUCCESS CONTEXT ==='
+          grep -nE 'finalizeMissionSuccess|function missionSuccess|factionRepGain|factionRepLoss' src/legacy/*.js | head -100
+          echo '=== BUILD TOOLS ==='; find tools -maxdepth 2 -type f -print | sort | head -120
+          echo '=== BUILDER KEY LINES ==='; grep -nE 'build-meta|runtime-bundle|SOURCE|version|hash|precache|service-worker|zip' tools/build_pwa11.py | head -220 || true
+          echo '=== RELEVANT TESTS ==='; find tests -maxdepth 1 -type f | grep -E 'pwa12_(82|83|86|88|90|94|98|100|102|103|104|39|56|62)|manifest|service_worker|service-worker|syntax' | sort
+          echo '=== PWA12.104 TEST ==='; cat tests/pwa12_104_street_contact_support_contract.py
+          echo '=== PWA12.103 TEST ==='; cat tests/pwa12_103_contextual_control_contract.py
