@@ -21,7 +21,7 @@ jobs:
           set -euo pipefail
           mkdir -p work
           python3 -m pip install --quiet gdown
-          gdown --id 1xVH-PyEtwwqUOK36vZ2TQDAiYrGhZqyk -O canonical.zip
+          gdown 1xVH-PyEtwwqUOK36vZ2TQDAiYrGhZqyk -O canonical.zip
           unzip -p canonical.zip cr103/build-meta.json >/tmp/meta.json
           python3 - <<'PY'
           import json
