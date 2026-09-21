@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work out
-          curl -fL --retry 3 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-7d30-820b-bcb5-22ab42d3e6e9/raw?se=2026-09-21T23%3A19%3A44Z&sp=r&sv=2026-02-06&sr=b&scid=f84b07fb-4fb5-5fe4-a0ba-7f00356783c6&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A45%3A20Z&ske=2026-09-22T21%3A45%3A20Z&sks=b&skv=2026-02-06&sig=atcjQkWmR8c9SW/CnGJl9bOB%2BFwUFt65xtLztdYxeXc%3D' -o canonical.zip
+          curl -fL --retry 3 'https://sdmntprnznorth.oaiusercontent.com/files/00000000-0efc-820b-b0d4-53712383082e/raw?se=2026-09-21T23%3A24%3A02Z&sp=r&sv=2026-02-06&sr=b&scid=dd683546-df0f-5c63-97c0-34a63ab5fffe&skoid=d5627e4c-566b-4761-a954-54993b0ed17b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T22%3A11%3A59Z&ske=2026-09-22T22%3A11%3A59Z&sks=b&skv=2026-02-06&sig=tJpNjgLeG72oWrVsCQIOqvUpskywEOt2rHLtu81PoF0%3D' -o canonical.zip
           unzip -q canonical.zip -d work
           test "$(python3 -c "import json;print(json.load(open('work/cr103/build-meta.json'))['version'])")" = '14.0.0-pwa.12.104-street-contact-support'
 
@@ -40,6 +40,7 @@ jobs:
           set -euo pipefail
           cp scripts/cr_pwa12_105_street_favor_contract.py work/cr103/tests/pwa12_105_street_favor_contract.py
           cp scripts/cr_pwa12_105_street_favor_browser.py work/cr103/tests/pwa12_105_street_favor_browser.py
+          sed -i "s/'reward':990/'reward':1238/" work/cr103/tests/pwa12_105_street_favor_browser.py
 
       - name: Prepare Chromium QA runtime
         shell: bash
