@@ -1,0 +1,290 @@
+{
+  "setup": {
+    "weapon": {
+      "m": {
+        "id": "qa_weapon_1",
+        "name": "weapon recovery 1",
+        "lootManufacturer": "kestrel",
+        "worldLocation": "rhine",
+        "sectorId": "glass_heights",
+        "area": "GLASS HEIGHTS",
+        "diff": 3
+      },
+      "d": {
+        "id": "v135salv_h7znbo",
+        "sourceMissionId": "qa_weapon_1",
+        "missionName": "weapon recovery 1",
+        "day": 1,
+        "kind": "weapon",
+        "key": "kestrel_needle",
+        "manufacturer": "kestrel",
+        "manufacturerName": "KESTREL DYNAMICS",
+        "origin": "GLASS HEIGHTS",
+        "condition": 68,
+        "quality": "FIELD-WORN",
+        "basePrice": 2350,
+        "sellValue": 971,
+        "stripValue": 4
+      }
+    },
+    "first": true,
+    "again": false,
+    "pending": 1,
+    "ui": {
+      "width": 366,
+      "modalWidth": 400,
+      "overflow": 0,
+      "rightOverflow": 0,
+      "buttons": 3
+    }
+  },
+  "kept": {
+    "offer": true,
+    "ok": true,
+    "owned": true,
+    "notAuto": true,
+    "creditsSame": true,
+    "salvageSame": true,
+    "key": "kestrel_needle",
+    "equipped": {
+      "key": "kestrel_needle",
+      "damage": 16,
+      "range": 9,
+      "crit": 27
+    },
+    "unequipped": {
+      "key": "pistol",
+      "damage": 7,
+      "range": 4,
+      "crit": 15
+    }
+  },
+  "attachment": {
+    "m": {
+      "id": "qa_attachment_0",
+      "name": "attachment recovery 0",
+      "lootManufacturer": "kestrel",
+      "worldLocation": "rhine",
+      "sectorId": "glass_heights",
+      "area": "GLASS HEIGHTS",
+      "diff": 2
+    },
+    "d": {
+      "id": "v135salv_vlua4o",
+      "sourceMissionId": "qa_attachment_0",
+      "missionName": "attachment recovery 0",
+      "day": 1,
+      "kind": "attachment",
+      "key": "stock_stabilizer",
+      "manufacturer": "kestrel",
+      "manufacturerName": "KESTREL DYNAMICS",
+      "origin": "GLASS HEIGHTS",
+      "condition": 78,
+      "quality": "SERVICEABLE",
+      "basePrice": 490,
+      "sellValue": 212,
+      "stripValue": 2
+    },
+    "slot": "stock",
+    "platform": "sniper"
+  },
+  "attach_result": {
+    "kept": true,
+    "before": 0,
+    "owned": 1,
+    "installed": true,
+    "mod": "stock_stabilizer",
+    "removed": true,
+    "reinstalled": true,
+    "slot": "stock",
+    "damage": 16,
+    "range": 10,
+    "crit": 27
+  },
+  "combat": {
+    "found": true,
+    "weapon": "kestrel_needle",
+    "damage": 16,
+    "range": 10,
+    "crit": 27,
+    "roster": {
+      "weapon": "kestrel_needle",
+      "damage": 16,
+      "range": 10,
+      "crit": 27
+    }
+  },
+  "strip": {
+    "ok": true,
+    "strip": 2,
+    "before": 0,
+    "after": 2,
+    "quote": {
+      "credits": 40,
+      "salvage": 1,
+      "wear": 18,
+      "items": 1
+    },
+    "repair": true,
+    "beforeRepair": 2,
+    "afterRepair": 1,
+    "wear": 0
+  },
+  "sold": {
+    "ok": true,
+    "sell": 190,
+    "before": 49960,
+    "after": 50150
+  },
+  "market": {
+    "labels": [
+      "IMPORTED \u00b7 +12%",
+      "LOCAL INDUSTRY \u00b7 \u22128%",
+      "LOCAL INDUSTRY \u00b7 \u22128%",
+      "IMPORTED \u00b7 +12%",
+      "LOCAL COMPONENT \u00b7 \u22124%",
+      "IMPORT COMPONENT \u00b7 +6%",
+      "IMPORT COMPONENT \u00b7 +6%"
+    ],
+    "local": {
+      "mult": 0.92,
+      "label": "LOCAL INDUSTRY \u00b7 \u22128%",
+      "kind": "local"
+    },
+    "imported": {
+      "mult": 1.12,
+      "label": "IMPORTED \u00b7 +12%",
+      "kind": "import"
+    },
+    "rareBefore": true,
+    "buy": true,
+    "rareGone": true,
+    "rareAfter": false
+  },
+  "stats": {
+    "x": {
+      "version": 1,
+      "pending": [],
+      "resolved": {
+        "qa_weapon_1": {
+          "action": "keep",
+          "day": 1,
+          "key": "kestrel_needle",
+          "kind": "weapon",
+          "condition": 68,
+          "value": 0
+        },
+        "qa_attachment_0": {
+          "action": "keep",
+          "day": 1,
+          "key": "stock_stabilizer",
+          "kind": "attachment",
+          "condition": 78,
+          "value": 0
+        },
+        "qa_strip_0": {
+          "action": "strip",
+          "day": 1,
+          "key": "muzzle_heavy",
+          "kind": "attachment",
+          "condition": 59,
+          "value": 2
+        },
+        "qa_sell_0": {
+          "action": "sell",
+          "day": 1,
+          "key": "mako_riot",
+          "kind": "weapon",
+          "condition": 86,
+          "value": 190
+        }
+      },
+      "stats": {
+        "generated": 4,
+        "kept": 2,
+        "sold": 1,
+        "stripped": 1
+      }
+    },
+    "diag": {
+      "version": "13.5",
+      "passed": 12,
+      "total": 12,
+      "results": [
+        {
+          "name": "company state",
+          "ok": true,
+          "details": ""
+        },
+        {
+          "name": "active cap",
+          "ok": true,
+          "details": 3
+        },
+        {
+          "name": "roster partition",
+          "ok": true,
+          "details": ""
+        },
+        {
+          "name": "deterministic wage",
+          "ok": true,
+          "details": ""
+        },
+        {
+          "name": "daily cost",
+          "ok": true,
+          "details": 241
+        },
+        {
+          "name": "wear maps",
+          "ok": true,
+          "details": ""
+        },
+        {
+          "name": "deadline state",
+          "ok": true,
+          "details": ""
+        },
+        {
+          "name": "rival pressure",
+          "ok": true,
+          "details": 0
+        },
+        {
+          "name": "runtime facade",
+          "ok": true,
+          "details": ""
+        },
+        {
+          "name": "v13.4B retained",
+          "ok": true,
+          "details": ""
+        },
+        {
+          "name": "v13.4A retained",
+          "ok": true,
+          "details": ""
+        },
+        {
+          "name": "v12 tactical retained",
+          "ok": true,
+          "details": ""
+        }
+      ]
+    },
+    "overflow": 0
+  }
+}
+PASS PWA12.104 salvage-market browser: deterministic recovery, KEEP/SELL/STRIP, save/load migration, weapon swap, attachment install/remove, combat bridge, repair salvage sink, local/import pricing, one-shot rare stock, Pixel 7 UI
+PASS PWA12.45 loud perimeter breach escalates later enemy response and energizes two extraction hazards {'enemies': ['Guard', 'Enforcer', 'Drone', 'Drone'], 'strip': 'OPERATION 02/03 // SECURED INTERIOR // SECURITY RESPONSE: ESCALATED', 'alerted': True} {'enemies': ['Enforcer', 'Drone', 'Guard'], 'hazards': [[6, 5], [4, 6]], 'strip': 'OPERATION 03/03 // EXTRACTION ROUTE // SECURITY RESPONSE: ESCALATED', 'alerted': True}
+PASS PWA12.49 interior exfil reroute changes final topology and response footprint {'active': {'id': 'route_chain', 'index': 2, 'count': 3, 'securitySuppressed': False, 'extractionRerouted': True, 'intelExtracted': False, 'console': {'x': 2, 'y': 9}, 'routeConsole': {'x': 4, 'y': 3}, 'intelConsole': {'x': 3, 'y': 7}}, 'shape': 'corridor', 'enemies': 2, 'strip': 'OPERATION 03/03 // EXTRACTION ROUTE // SECURITY RESPONSE: ESCALATED // EXFIL: MAINTENANCE ROUTE', 'exfil': {'x': 4, 'y': 0}}
+DISTRICT_ART_PASS old_market market_street walls 12 covers 6
+DISTRICT_ART_PASS dock_nine dock walls 6 covers 6
+DISTRICT_ART_PASS forge_belt warehouse walls 4 covers 4
+DISTRICT_ART_PASS undergrid server_room walls 12 covers 6
+DISTRICT_ART_PASS neon_row club walls 12 covers 6
+DISTRICT_ART_PASS glass_heights office_entry walls 12 covers 6
+DISTRICT_ART_PASS civic_circuit parking_garage walls 11 covers 4
+DISTRICT_ART_PASS ash_blocks tenement_hall walls 6 covers 6
+MOBILE_ART_PASS {'board': 374, 'viewport': 390, 'scroll': 390, 'walls': 6} PAGE_ERRORS 0 MISSING_ASSETS 0

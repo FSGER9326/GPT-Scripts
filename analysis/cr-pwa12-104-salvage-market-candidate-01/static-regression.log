@@ -1,0 +1,29 @@
+PASS candidate version
+PASS schema retained
+PASS legacy loot delegated
+PASS durable salvage ledger
+PASS deterministic offer helper
+PASS three-way disposition
+PASS strip feeds canonical salvage
+PASS keep weapon does not auto-equip
+PASS market local supply pricing
+PASS rare stock consumed once
+PASS market supply badge
+PASS safehouse intake rendered
+PASS responsive salvage css
+PASS salvage-market source contract 13 checks
+PWA12.104 street contact support contract PASS
+PASS safe parser
+PASS corrupt primary does not throw
+PASS corrupt backup does not throw
+PASS backup validation
+PASS bridge can fall back
+PASS pwa12.31 save recovery contract
+PASS safe menu wrapper installed
+PASS visible slot uses validated bridge
+PASS double click guarded
+PASS failure preserves button and data
+PASS hydration precedes routing
+PASS PWA12.62 save-slot UI routes through v14 checksum/backup recovery
+PWA11 MANIFEST CONTRACT PASS {'screenshots': [{'src': './assets/screenshots/wide-overworld.png', 'sizes': '1280x800', 'type': 'image/png', 'form_factor': 'wide', 'label': 'Old Market district exploration'}, {'src': './assets/screenshots/phone-overworld.png', 'sizes': '1082x2202', 'type': 'image/png', 'label': 'Old Market on mobile'}], 'categories': ['games', 'entertainment']}
+PWA11 SERVICE WORKER PASS { entries: 1145, cache: 'chrome-requiem-v14-edcf4b3076eae4c95d397b3d' }
