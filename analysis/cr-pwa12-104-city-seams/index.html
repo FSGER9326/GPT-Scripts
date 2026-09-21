@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script>window.CR14_BUILD_VERSION="14.0.0-pwa.12.104-street-contact-support";</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<script>
+// PWA12.42: overlap asset-manifest I/O with CSS/runtime download and JS parse.
+window.CR14_ASSET_MANIFEST_PROMISE=fetch('./assets/asset-manifest.json',{cache:'no-cache'})
+  .then(r=>r.ok?r.json():null).catch(()=>null);
+</script>
+<title>Chrome Requiem v14 — PWA</title>
+
+<link rel="stylesheet" href="./src/styles/runtime-bundle.css">
+
+
+<meta name="theme-color" content="#05060a"><link rel="manifest" href="./manifest.webmanifest">
+
+</head>
+<body><div id="cr14-boot-overlay">CHROME REQUIEM v14 // INITIALIZING LOCAL RUNTIME</div>
+<div id="app">
+
+<!-- INTRO -->
+<div id="intro" class="screen active">
+  <div id="intro-logo">CHROME<span>REQUIEM</span></div>
+  <div id="intro-tag">TACTICAL · CYBERPUNK · RPG</div>
+  <div id="intro-btns">
+    <button class="btn primary" id="btn-newgame">▶ NEW GAME</button>
+    <button class="btn" id="btn-loadgame">◈ LOAD GAME</button>
+  </div>
+  <div id="intro-quote">"In the chrome city, everybody's got a price. The trick is knowing yours before someone else decides it for you."</div>
+</div>
+
+<!-- CHAR CREATE -->
+<div id="charcreate" class="screen">
+  <div class="cc-title">CHARACTER CREATION</div>
+  <div class="cc-sub">The city is waiting. Who are you?</div>
+  <div class="cc-section">
+    <div class="cc-label">HANDLE</div>
+    <input type="text" class="cc-name-input" id="cc-name" placeholder="Enter your name" maxlength="16" value="Vex">
+  </div>
+  <div class="cc-section">
+    <div class="cc-label">CLASS</div>
+    <div class="cc-grid" id="cc-classes"></div>
+  </div>
+  <div class="cc-section">
+    <div class="cc-label">BACKGROUND</div>
+    <div class="cc-grid" id="cc-backgrounds"></div>
+  </div>
+  <div id="cc-confirm">
+    <button class="btn primary" id="cc-go">BEGIN</button>
+    <button class="btn" id="cc-back">◀ BACK</button>
+  </div>
+</div>
+
+<!-- STORY -->
+<div id="story" class="screen">
+  <div id="story-box">
+    <div id="story-header">— TRANSMISSION —</div>
+    <div id="story-text"></div>
+    <div id="story-choices"></div>
+  </div>
+</div>
+
+<!-- OVERWORLD -->
+<div id="overworld-screen" class="screen">
+  <div class="topbar">
+    <div class="stat credits">¢ <b id="ov-credits">0</b></div>
+    <div class="stat day">DAY <b id="ov-day">1</b> · <b id="ov-time">08:00</b></div>
+    <div class="stat rep">REP <b id="ov-rep">0</b></div>
+    <div class="spacer"></div>
+    <button class="btn small" id="ov-crew-btn">CREW</button>
+    <button class="btn small" id="ov-fac-btn">FAC</button>
+    <button class="btn small" id="ov-journal-btn">LOG</button>
+    <button class="btn small" id="ov-menu-btn">≡</button>
+  </div>
+  <div class="wrap">
+    <canvas id="overworld"></canvas>
+    <div id="ov-hud"><div id="ov-location">Sector A-1</div><div class="hint">Tap tile to move · Tap marker to interact</div></div>
+    <div id="district-label"><div id="dl-name">NERO DISTRICT</div><div class="sub" id="dl-control">MERIDIAN CORP</div></div>
+    <div id="contact-panel"><button class="close" id="contact-close">✕</button><h2 id="contact-name">CONTACT</h2><div class="role" id="contact-role">—</div><div id="contact-missions"></div></div>
+    <div id="toast"></div>
+  </div>
+</div>
+
+<!-- COMBAT -->
+<div id="combat" class="screen">
+  <header id="hud">
+    <div class="portrait" id="portrait"></div>
+    <div class="hud-info">
+      <div class="hud-name" id="sel-name">—</div>
+      <div class="hp-row"><div class="hp-bar"><i id="sel-hp-fill"></i></div><span class="hp-text" id="sel-hp-text">0/0</span></div>
+    </div>
+    <div class="hud-right">
+      <div class="ap-label">AP</div>
+      <div class="ap-pips" id="sel-ap-pips"></div>
+      <div class="turn" id="turn-indicator">PLAYER TURN</div>
+    </div>
+  </header>
+  <div id="board">
+    <canvas id="board-bg"></canvas>
+    <div id="grid"></div>
+    <div id="units"></div>
+    <canvas id="fx"></canvas>
+    <div id="vignette"></div>
+    <div id="scanlines"></div>
+  </div>
+  <div id="init-strip"></div>
+  <div id="actions"></div>
+  <div id="log"></div>
+</div>
+
+<!-- CREW -->
+<div id="crew" class="screen">
+  <div class="topbar">
+    <div class="stat">CREW ROSTER</div>
+    <div class="spacer"></div>
+    <button class="btn small" id="crew-back-btn">◀ BACK</button>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-tab="roster">ROSTER</div>
+    <div class="tab" data-tab="skills">SKILLS</div>
+    <div class="tab" data-tab="inventory">GEAR</div>
+  </div>
+  <div id="crew-body"></div>
+</div>
+
+<!-- FACTION -->
+<div id="faction-screen" class="screen">
+  <div class="topbar">
+    <div class="stat">FACTION STANDINGS</div>
+    <div class="spacer"></div>
+    <button class="btn small" id="fac-back-btn">◀ BACK</button>
+  </div>
+  <div id="faction-body" style="flex:1;overflow-y:auto;margin-top:8px"></div>
+</div>
+
+<!-- VENDOR -->
+<div id="vendor" class="screen">
+  <div class="topbar">
+    <div class="stat" id="vendor-cr">¢ 0</div>
+    <div class="spacer"></div>
+    <button class="btn small" id="vendor-back-btn">◀ LEAVE</button>
+  </div>
+  <div id="vendor-body" style="flex:1;overflow-y:auto;margin-top:8px">
+    <div class="vendor-header">
+      <div class="vendor-title" id="vendor-title">VENDOR</div>
+    </div>
+    <div class="vendor-grid" id="vendor-grid"></div>
+  </div>
+</div>
+
+<!-- JOURNAL -->
+<div id="journal" class="screen">
+  <div class="topbar">
+    <div class="stat">JOURNAL</div>
+    <div class="spacer"></div>
+    <button class="btn small" id="journal-back-btn">◀ BACK</button>
+  </div>
+  <div id="journal-body" style="flex:1;overflow-y:auto;margin-top:8px"></div>
+</div>
+
+<!-- MENU -->
+<div id="menu" class="screen">
+  <div id="menu-box">
+    <div id="menu-title">PAUSED</div>
+    <button class="btn primary" id="menu-resume">▶ RESUME</button>
+    <button class="btn" id="menu-save">◈ SAVE GAME</button>
+    <button class="btn" id="menu-load">◈ LOAD GAME</button>
+    <button class="btn magenta" id="menu-quit">⏻ QUIT TO TITLE</button>
+  </div>
+</div>
+
+<!-- LOAD MENU -->
+<div id="load-menu" class="screen">
+  <div id="load-menu-box">
+    <div id="load-menu-title">LOAD GAME</div>
+    <div id="load-slots"></div>
+    <button class="btn" id="load-back">◀ BACK</button>
+  </div>
+</div>
+
+<!-- TRAVEL EVENT -->
+<div id="travel-event">
+  <div id="te-box">
+    <div id="te-title">TRAVEL EVENT</div>
+    <div id="te-text"></div>
+    <div id="te-choices"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal"><div id="modal-inner"></div></div>
+
+</div>
+<script defer src="./src/runtime/runtime-bundle.js"></script>
+</body>
+</html>
