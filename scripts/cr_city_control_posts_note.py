@@ -25,7 +25,7 @@ The implementation follows these verified authorities rather than creating a par
 ## Substantial player-facing improvement: persistent free-roam district control posts
 Control infrastructure now exists outside jobs. When live Access Ecology indicates meaningful physical friction at an ordinary transit approach — lockdown, ID sweep, screening, street levy, cargo toll, inspection or equivalent elevated pressure — a control post appears at the real transit node in the explorable district.
 
-The post is derived from the actual crossing and its live endpoint neighborhoods, not from an abstract travel menu. It is drawn on the overworld, can be tapped, and routes the crew through the existing A* path into `Game.pendingPath`. The player is never teleported. Reaching the post through ordinary street movement opens the interaction.
+The post is derived from the actual crossing and its live endpoint neighborhoods, not from an abstract travel menu. It is drawn on the overworld, can be tapped, and routes the crew through the canonical transit-node routing authority, which owns the A* path, `Game.pendingPath`, camera follow and overworld movement wakeup. The player is never teleported. Reaching the post through ordinary street movement opens the interaction.
 
 The post also intercepts ordinary transit. Candidate 07 patches the narrow lexical seam inside canonical `openTransitNodeV133()` / `travelDistrictV133()` because the canonical transit modal calls its closure-local travel function. This prevents a UI path from bypassing the world object while preserving canonical travel as the crossing authority.
 
@@ -40,7 +40,7 @@ A successful resolution grants one persisted crossing clearance for that exact l
 
 A successful violent resolution additionally suppresses that control post for 180 game minutes. Neighborhood/faction combat consequences are still owned by `settleStreetCombatV134()`; Candidate 07 only records the post suppression and one-crossing clearance after the established aftermath runs.
 
-Because `Game.pendingPath` is intentionally transient, Candidate 07 persists the approach objective itself. Loading a save made while walking to a post reconstructs the A* route from the saved district/link objective and the crew's restored physical position.
+Because `Game.pendingPath` is intentionally transient, Candidate 07 persists the approach objective itself. Loading a save made while walking to a post reconstructs the route from the saved district/link objective and the crew's restored physical position through the canonical transit-node route authority.
 
 ## Candidate 07 implementation files
 - `src/world/district-control-posts-pwa12-104-city-candidate-07.js` — live post derivation, physical marker/tap/arrival flow, UI, resolutions, clearance/suppression/persistence and Candidate 06 coexistence.
@@ -57,11 +57,16 @@ This note is generated only after the packaging workflow has passed the precedin
 - cumulative Candidate 01–06 contracts before Candidate 07;
 - Candidate 07 focused contract and JavaScript syntax checks;
 - canonical Street Contact Support, district-control, street-combat/aftermath, save atomicity/recovery, active-city performance, route-marker performance, manifest and service-worker regressions;
-- Chromium at 390×844 proving a control post exists with **no active dispatch**, blocks ordinary transit bypass, creates a real A* `Game.pendingPath` without moving the player instantly, survives save/load by reconstructing that route, is physically reached through the production overworld movement loop, exposes touch-safe mobile UI, persists a Hacker clearance, crosses through canonical `travelDistrictV133()`, consumes the clearance exactly once, and uses the established tactical street-combat bridge for violent resolution/suppression;
-- cumulative Candidate 06, 05, 04, 03 and 02 browser regressions;
+- Chromium at 390×844 proving a control post exists with **no active dispatch**, blocks ordinary transit bypass, creates a real canonical A* `Game.pendingPath` without moving the player instantly, survives save/load by reconstructing that route, is physically reached through the production overworld movement loop, exposes touch-safe mobile UI, persists a Hacker clearance, crosses through canonical `travelDistrictV133()`, consumes the clearance exactly once, and uses the established tactical street-combat bridge for violent resolution/suppression;
+- cumulative Candidate 06, 05, 04, 03 and 02 browser regressions. Candidate 03's final crossing explicitly resolves a Candidate 07 post through the public physical Hacker interaction if live pressure creates one, so the older disruption flow is tested against the new free-roam infrastructure rather than bypassing it;
 - existing PWA12.49 operation-routing and PWA12.45 multi-stage combat/extraction browser regressions.
 
 Mobile QA capture: `{qa.name}` ({'present' if qa.exists() else 'missing at note-generation time'}).
+
+## QA findings corrected during development
+- The first physical-approach browser attempt exposed a real integration flaw: Candidate 07 wrote `Game.pendingPath` directly and did not wake the canonical frozen-overworld movement loop. Routing now delegates to `routeToTransitNodeV133()`, preserving A*, camera and movement scheduling under the established authority.
+- A subsequent browser failure was a QA-only JavaScript typo in the Hacker assertion (`post:` inside a `const` declaration). That run is discarded as verification; the harness was corrected and rerun.
+- Once Candidate 07 itself passed, the cumulative Candidate 03 browser regression exposed an obsolete assumption that a high-pressure corridor could cross immediately after its disruption was resolved. The regression now clears any live Candidate 07 control post through its real Hacker interaction before testing Candidate 03's canonical crossing and last-mile behavior. The product system was not disabled to satisfy the older test.
 
 ## Known boundaries
 - Posts are systemic live world objects derived from transit-link and neighborhood state, not permanently authored barricade scenery. If the underlying pressure clears, an unresolved derived post can disappear; this is intentional reactivity rather than static level decoration.
