@@ -28,21 +28,20 @@ with sync_playwright() as pw:
         const d=Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y);if(d<28)continue;
         pairs.push({start:pts[i],goal:pts[j],d});pairs.push({start:pts[j],goal:pts[i],d});
       }
-      // Long physical lines are most likely to cross the forced central patrol pressure. Limit
-      // route comparisons so QA validates gameplay rather than turning into an A* stress test.
       pairs.sort((a,b)=>b.d-a.d);let chosen=null,fallback=null,checked=0;
       for(const pair of pairs.slice(0,32)){
         Game.ovPlayer={x:pair.start.x,y:pair.start.y};
         const base=findDistrictPathV133(Game.ovPlayer,pair.goal,w);if(!base?.length||base.length<24)continue;
         const p=planPatrolRoutesV12104({x:pair.goal.x,y:pair.goal.y},{kind:'point',label:'QA STREET TARGET'});checked++;
-        if(!p?.plans?.fast||!p.plans.low||!p.plans.back)continue;
-        const sig=x=>x.path.map(q=>q.x+','+q.y).join('|'),different=sig(p.plans.fast)!==sig(p.plans.low)||sig(p.plans.fast)!==sig(p.plans.back),best=Math.min(p.plans.low.analysis.exposure,p.plans.back.analysis.exposure);
-        if(different&&!fallback)fallback={start:pair.start,goal:pair.goal,plans:p,pick:p.plans.low.analysis.exposure<=p.plans.back.analysis.exposure?'low':'back'};
-        if(different&&p.plans.fast.analysis.exposure>=8&&best<p.plans.fast.analysis.exposure){chosen={start:pair.start,goal:pair.goal,plans:p,pick:p.plans.low.analysis.exposure<=p.plans.back.analysis.exposure?'low':'back'};break}
+        const fp=p?.plans?.fast,lp=p?.plans?.low,bp=p?.plans?.back;if(!fp?.analysis||!lp?.analysis||!bp?.analysis)continue;
+        const sig=x=>(x.path||[]).map(q=>q.x+','+q.y).join('|'),different=sig(fp)!==sig(lp)||sig(fp)!==sig(bp),best=Math.min(lp.analysis.exposure,bp.analysis.exposure),pick=lp.analysis.exposure<=bp.analysis.exposure?'low':'back';
+        const snap={start:pair.start,goal:pair.goal,pick,metrics:{fast:{...fp.analysis},low:{...lp.analysis},back:{...bp.analysis}}};
+        if(different&&!fallback)fallback=snap;
+        if(different&&fp.analysis.exposure>=8&&best<fp.analysis.exposure){chosen=snap;break}
       }
       chosen=chosen||fallback;if(!chosen)throw new Error(`No canonical physical point pair produced distinct route tactics in ${checked} bounded comparisons under forced patrol pressure`);
       Game.ovPlayer={x:chosen.start.x,y:chosen.start.y};Game.districtWorldsV133.positions[w.id]={x:chosen.start.x,y:chosen.start.y};Game.pendingPath=null;Game._v133TravelTarget=null;
-      const corridors=patrolCorridorsForWorldV12104(w);return{start:chosen.start,goal:chosen.goal,pick:chosen.pick,plans:{fast:chosen.plans.fast.analysis,low:chosen.plans.low.analysis,back:chosen.plans.back.analysis},corridors:corridors.length,hoods:ranked.slice(0,2).map(x=>x.id),checked};
+      const corridors=patrolCorridorsForWorldV12104(w);return{start:chosen.start,goal:chosen.goal,pick:chosen.pick,plans:chosen.metrics,corridors:corridors.length,hoods:ranked.slice(0,2).map(x=>x.id),checked};
     }''')
     assert setup['corridors']>0,setup
     assert 1<=setup['checked']<=32,setup
