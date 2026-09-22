@@ -1,0 +1,13 @@
+.v14-calibration-panel{margin-top:10px}
+.v14-cal-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px}
+.v14-cal-head>div{display:flex;flex-direction:column;gap:3px}
+.v14-cal-head b{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:1.6px;color:var(--orange,#ffaa00)}
+.v14-cal-head span,.v14-cal-head small{font-size:9px;color:#8fa8b8}
+.v14-cal-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.v14-cal-card{min-width:0;border:1px solid rgba(0,240,255,.2);background:rgba(0,10,20,.44);padding:8px;border-radius:4px}
+.v14-cal-card.active{border-color:rgba(255,170,0,.7);box-shadow:inset 0 0 0 1px rgba(255,170,0,.15)}
+.v14-cal-card h5{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:1px;color:#c8e8f0;margin:0 0 4px}
+.v14-cal-card p{font-size:9px;line-height:1.35;color:#7895a5;margin:5px 0}
+.v14-cal-delta{font-size:9px;color:var(--cyan,#00f0ff)}
+.v14-cal-cost{font-size:9px;color:var(--orange,#ffaa00);margin-bottom:6px}
+@media(max-width:600px){.v14-cal-grid{grid-template-columns:1fr}.v14-cal-head{flex-direction:column}.v14-cal-card{padding:9px}.v14-cal-card .btn{min-height:44px;width:100%}}
