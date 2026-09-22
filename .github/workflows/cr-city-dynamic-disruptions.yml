@@ -1,0 +1,120 @@
+name: CR City Dynamic Disruptions
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cr-city-dynamic-disruptions.yml'
+      - 'scripts/cr_city_dynamic_disruptions_patch.py'
+      - 'scripts/cr_city_dynamic_disruptions_contract.py'
+      - 'scripts/cr_city_dynamic_disruptions_browser.py'
+      - 'scripts/cr_city_dynamic_disruptions_note.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 42
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact PWA12.104 canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work out
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          test -n "$INNER"
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          test -n "$ROOT"
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
+          python3 -c "import json;m=json.load(open('build-meta.json'));assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m;assert m['buildHash']=='4313da4acd4c324a7672c36e',m;assert m['schemaVersion']==14,m;print('VERIFIED EXACT CANONICAL',m)"
+          echo "ROOT=$PWD" >> "$GITHUB_ENV"
+      - name: Apply cumulative city candidates and dynamic disruption candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_dispatches_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_ui_preserve.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_lastmile_atomic_patch.py "$ROOT"
+          python3 scripts/cr_city_runtime_bundle_order_patch.py "$ROOT"
+          python3 scripts/cr_city_dynamic_disruptions_patch.py "$ROOT"
+          cp scripts/cr_city_dispatches_cumulative_contract.py "$ROOT/tests/pwa12_104_city_dispatches_cumulative_contract.py"
+          cp scripts/cr_city_interdistrict_logistics_contract.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_contract.py"
+          cp scripts/cr_city_dynamic_disruptions_contract.py "$ROOT/tests/pwa12_104_city_dynamic_disruptions_contract.py"
+          cp scripts/cr_city_dispatches_browser.py "$ROOT/tests/pwa12_104_city_dispatches_browser.py"
+          cp scripts/cr_city_interdistrict_logistics_browser.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_browser.py"
+          cp scripts/cr_city_dynamic_disruptions_browser.py "$ROOT/tests/pwa12_104_city_dynamic_disruptions_browser.py"
+          python3 scripts/cr_city_dispatches_browser_lifecycle_patch.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-dynamic-disruptions-candidate.03'
+          node --check src/world/district-dispatches-pwa12-104-city-candidate-01.js
+          node --check src/world/interdistrict-logistics-pwa12-104-city-candidate-02.js
+          node --check src/world/dynamic-logistics-disruptions-pwa12-104-city-candidate-03.js
+          node --check src/world/district-worlds-v13-3.js
+          node --check src/runtime/runtime-bundle.js
+      - name: Focused and inherited regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ROOT"
+          python3 tests/pwa12_104_city_dispatches_cumulative_contract.py .
+          python3 tests/pwa12_104_city_interdistrict_logistics_contract.py .
+          python3 tests/pwa12_104_city_dynamic_disruptions_contract.py .
+          python3 tests/pwa12_104_street_contact_support_contract.py
+          python3 tests/pwa12_103_district_control_context_contract.py
+          python3 tests/pwa12_100_district_control_effect_contract.py
+          python3 tests/pwa12_38_save_snapshot_atomicity_contract.py
+          python3 tests/pwa12_31_save_recovery_contract.py
+          python3 tests/pwa12_27_active_city_perf_contract.py
+          python3 tests/pwa12_19_route_marker_perf_contract.py
+          python3 tests/pwa11_manifest_contract.py
+          node tests/pwa11_service_worker.test.mjs
+      - name: Prepare Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          P=$(python3 -c "from playwright.sync_api import sync_playwright;p=sync_playwright().start();print(p.chromium.executable_path);p.stop()")
+          sudo ln -sf "$P" /usr/bin/chromium
+      - name: Browser integration and city-combat routing regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ROOT"
+          python3 tests/pwa12_104_city_dynamic_disruptions_browser.py .
+          python3 tests/pwa12_104_city_interdistrict_logistics_browser.py .
+          python3 tests/pwa12_49_operation_routing_browser.py
+          python3 tests/pwa12_45_stage_consequences_browser.py
+      - name: Document and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_dynamic_disruptions_note.py "$ROOT" "$GITHUB_WORKSPACE/out"
+          cd "$ROOT"
+          cp qa/pwa12-104-city-dynamic-disruption-mobile.png "$GITHUB_WORKSPACE/out/"
+          cp build-meta.json "$GITHUB_WORKSPACE/out/BUILD_META.json"
+          C='Chrome_Requiem_v14_PWA_pwa12_104_CITY_DYNAMIC_DISRUPTIONS_CANDIDATE_03'
+          cd ..
+          mv "$(basename "$ROOT")" "$C"
+          zip -qr "$GITHUB_WORKSPACE/out/${C}_source.zip" "$C"
+          sha256sum "$GITHUB_WORKSPACE/out/${C}_source.zip" | tee "$GITHUB_WORKSPACE/out/SHA256.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-PWA12-104-City-Dynamic-Disruptions-Candidate-03
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
