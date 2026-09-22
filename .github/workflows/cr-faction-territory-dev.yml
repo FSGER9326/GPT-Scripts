@@ -1,0 +1,95 @@
+name: CR Faction Territory Dev
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cr-faction-territory-dev.yml'
+      - 'scripts/cr_pwa12_104_faction_territory_patch.py'
+      - 'scripts/cr_pwa12_104_faction_territory_browser.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact PWA12.104 canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work out
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          test -n "$INNER"
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          test -n "$ROOT"
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build-meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m
+          assert m['buildHash']=='4313da4acd4c324a7672c36e',m
+          assert m['schemaVersion']==14,m
+          print('VERIFIED_CANONICAL',m)
+          PY
+          echo "CANONICAL_ROOT=$PWD" >> "$GITHUB_ENV"
+      - name: Extract faction/city seams
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, os
+          root=Path(os.environ['CANONICAL_ROOT'])
+          src=(root/'src/world/living-streets-v13-4a.js').read_text()
+          city=(root/'src/legacy/city-life-v13.js').read_text()
+          mission=(root/'src/missions/contract-approaches-v13-4b.js').read_text()
+          out=Path('out/faction_seams.txt')
+          def extract(text,name):
+              needle='function '+name+'('
+              i=text.find(needle)
+              if i<0:return f'\n===== {name}: MISSING =====\n'
+              b=text.find('{',i)
+              depth=0; quote=None; esc=False; template=0
+              for j in range(b,len(text)):
+                  c=text[j]
+                  if quote:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: quote=None
+                      continue
+                  if c in ('\"',"'"):
+                      quote=c; continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth==0:return f'\n===== {name} =====\n'+text[i:j+1]+'\n'
+              return f'\n===== {name}: UNTERMINATED =====\n'
+          names=['ensureLivingStreetsStateV134','districtMetaV134','currentWorldV134','ensureNeighborhoodStateV134','currentNeighborhoodStateV134','streetContactSupportV134','actorThreatV134','actorContactCheckV134','triggerActorEncounterV134','applyEffectsV134','updateNeighborhoodHUDV134','launchStreetCombatV134','settleStreetCombatV134']
+          data=''.join(extract(src,n) for n in names)
+          data+='\n===== CONTROLLER/FACTION LITERALS =====\n'
+          for text,label in [(src,'STREETS'),(city,'CITY'),(mission,'MISSION')]:
+              for m in re.finditer(r'.{0,220}(?:controller|control|faction|rep|heat|contact|sectorId|staging|extract|approach).{0,300}',text,re.I|re.S):
+                  frag=m.group(0).replace('\n',' ')
+                  if len(frag)>650: frag=frag[:650]
+                  data+=f'[{label}] {frag}\n'
+          out.write_text(data)
+          print(data[:55000])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cr-faction-territory-seams
+          path: out/faction_seams.txt
+          retention-days: 3
