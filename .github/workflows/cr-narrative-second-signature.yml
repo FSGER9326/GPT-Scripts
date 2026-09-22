@@ -1,0 +1,224 @@
+name: CR Narrative Second Signature Candidate
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cr-narrative-second-signature.yml'
+      - 'scripts/cr_pwa12_104_second_signature_patch.py'
+      - 'scripts/cr_pwa12_104_second_signature_contract.py'
+      - 'scripts/cr_pwa12_104_second_signature_browser.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct and verify exact PWA12.104 canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work out
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          test -n "$INNER"
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          test -n "$ROOT"
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build-meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m
+          assert m['buildHash']=='4313da4acd4c324a7672c36e',m
+          assert m['schemaVersion']==14,m
+          print('VERIFIED_CANONICAL',m)
+          PY
+          cd "$GITHUB_WORKSPACE"
+          cp -a "$ROOT" baseline-pwa12-104
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+          echo "BASELINE_ROOT=$GITHUB_WORKSPACE/baseline-pwa12-104" >> "$GITHUB_ENV"
+
+      - name: Apply one narrative slice and rebuild candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_pwa12_104_second_signature_patch.py "$ROOT"
+          cp scripts/cr_pwa12_104_second_signature_contract.py "$ROOT/tests/pwa12_104_second_signature_contract.py"
+          cp scripts/cr_pwa12_104_second_signature_browser.py "$ROOT/tests/pwa12_104_second_signature_browser.py"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-narrative-second-signature-candidate.01'
+          cp build-meta.json "$GITHUB_WORKSPACE/out/BUILD_META.json"
+
+      - name: Prepare Chromium QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          PLAYWRIGHT_CHROMIUM=$(python3 -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()")
+          sudo ln -sf "$PLAYWRIGHT_CHROMIUM" /usr/bin/chromium
+
+      - name: Static, schema, persistence and PWA contracts
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            node --check src/runtime/runtime-bundle.js
+            python3 tests/pwa12_104_second_signature_contract.py .
+            python3 tests/pwa12_104_street_contact_support_contract.py
+            python3 tests/pwa12_31_save_recovery_contract.py
+            python3 tests/pwa12_62_safe_load_menu_contract.py
+            python3 tests/pwa11_manifest_contract.py
+            node tests/pwa11_service_worker.test.mjs
+          } 2>&1 | tee "$GITHUB_WORKSPACE/out/static-regression.log"
+
+      - name: Second Signature desktop/mobile gameplay integration
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/pwa12_104_second_signature_browser.py . 2>&1 | tee "$GITHUB_WORKSPACE/out/second-signature-browser.log"
+          cp qa/pwa12-104-second-signature-desktop-choice.png "$GITHUB_WORKSPACE/out/"
+          cp qa/pwa12-104-second-signature-desktop-outcome.png "$GITHUB_WORKSPACE/out/"
+          cp qa/pwa12-104-second-signature-mobile-choice.png "$GITHUB_WORKSPACE/out/"
+          cp qa/pwa12-104-second-signature-mobile-outcome.png "$GITHUB_WORKSPACE/out/"
+
+      - name: Affected contact and mission/combat regressions
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            python3 tests/pwa12_67_intel_contact_browser.py
+            python3 tests/pwa12_49_operation_routing_browser.py
+            python3 tests/pwa12_45_stage_consequences_browser.py
+            python3 tests/pwa12_67_architecture_browser.py
+          } 2>&1 | tee "$GITHUB_WORKSPACE/out/affected-flow-regression.log"
+
+      - name: Controlled progressed-campaign persistence comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          (cd "$BASELINE_ROOT" && python3 tests/pwa12_54_progressed_campaign_browser.py) > out/baseline-progressed-campaign.log 2>&1
+          BASE_RC=$?
+          (cd "$ROOT" && python3 tests/pwa12_54_progressed_campaign_browser.py) > out/candidate-progressed-campaign.log 2>&1
+          CAND_RC=$?
+          set -e
+          echo "baseline_rc=$BASE_RC candidate_rc=$CAND_RC" | tee out/progressed-campaign-control.log
+          cat out/baseline-progressed-campaign.log >> out/progressed-campaign-control.log
+          echo '--- candidate ---' >> out/progressed-campaign-control.log
+          cat out/candidate-progressed-campaign.log >> out/progressed-campaign-control.log
+          if [ "$BASE_RC" -eq 0 ] && [ "$CAND_RC" -ne 0 ]; then
+            echo 'REGRESSION: candidate fails a progressed-campaign persistence test canonical passes' >&2
+            exit 1
+          fi
+          if [ "$BASE_RC" -ne 0 ]; then
+            [ "$CAND_RC" -ne 0 ] || { echo 'candidate unexpectedly changes canonical baseline test behavior'; exit 1; }
+            BASE_MSG=$(grep -F 'durable save/load mismatches:' out/baseline-progressed-campaign.log | tail -n1 || true)
+            CAND_MSG=$(grep -F 'durable save/load mismatches:' out/candidate-progressed-campaign.log | tail -n1 || true)
+            [ -n "$BASE_MSG" ] && [ "$BASE_MSG" = "$CAND_MSG" ] || { echo 'baseline/candidate persistence failures differ' >&2; exit 1; }
+            echo "CONTROLLED PRE-EXISTING FAILURE: $BASE_MSG" | tee -a out/progressed-campaign-control.log
+          else
+            echo 'PASS canonical and candidate progressed-campaign persistence control' | tee -a out/progressed-campaign-control.log
+          fi
+
+      - name: Document exact changes, verification and next target
+        shell: bash
+        run: |
+          set -euo pipefail
+          META=$(cat "$ROOT/build-meta.json")
+          CONTROL=$(tail -n1 out/progressed-campaign-control.log)
+          cat > "$ROOT/DEVELOPMENT_NOTE_PWA12_104_NARRATIVE_SECOND_SIGNATURE_CANDIDATE_01.md" <<EOF
+          # Chrome Requiem PWA12.104 — THE SECOND SIGNATURE Candidate 01
+
+          ## Provenance
+          Built from the explicit PWA12.104 canonical only. The workflow reconstructed canonical, rebundled it, and reproduced exact canonical build `4313da4acd4c324a7672c36e` before any candidate edit. Canonical was not modified.
+
+          ## Playable content
+          A new in-person Mira contact beat in Old Market. A mercenary crew completed a job, its lead died before escrow settlement, and two surviving operators live behind borrowed identities. Corporate clearing needs a living second signature.
+
+          **ENTER THE LEDGER** releases the full survivor settlement but makes their aliases correlatable through the player company: +4 Meridian heat, +4 Mira trust, 10 action-minutes, durable outcome `ledger_witness`, next hook `second_signature_audit_echo`.
+
+          **KEEP THEM NAMELESS** sells the claim through the Old Market at a 40% haircut while preserving identity compartmentalization: -2 Meridian heat, +2 Mira trust, 8 action-minutes, durable outcome `offbook_settlement`, next hook `second_signature_claim_market`.
+
+          The company receives the same ¢300 witness fee either way so personal payout does not collapse the choice into an economy optimization.
+
+          ## Exact code/content changes
+          - Added `src/narrative/second-signature-v14.js`.
+          - Added `src/styles/34-v14-second-signature.css`.
+          - Added one post-render hook to Mira's existing City Life dossier.
+          - Registered `narrative.secondSignature` immediately after City Life visual fixes.
+          - Added ordered JS/CSS bundle markers and raw-source PWA precache exclusions.
+          - Added deterministic source contract and Chromium integration tests under `tests/`.
+          - Durable state is additive under `Game.storyFlags.secondSignatureV14`; save schema remains 14.
+
+          ## Reachability and state rules
+          Mira's canonical starting trust already satisfies the 25 trust gate. Resolution additionally requires Old Market, `loc_contact_c1`, Manhattan distance <=2 from Mira, no active mission, and no previous outcome. Remote dossier viewing is allowed but both irreversible actions are disabled. Outcome resolution is exclusive and idempotent.
+
+          ## Executed verification
+          - Exact canonical identity/hash reproduced before patching.
+          - Candidate JS runtime syntax checked.
+          - Focused static contract passed.
+          - Canonical street-contact, save-recovery, safe-load, manifest and service-worker contracts passed.
+          - Real headless Chromium executed both branches: 1440x900 ENTER THE LEDGER and 390x844 KEEP THEM NAMELESS.
+          - Browser test verified heat, trust, credits, branch state, replay rejection, remote lock, active-mission lock and save -> deliberate live corruption -> load restoration.
+          - Four screenshots were captured by those real browser executions.
+          - Existing intel-contact dossier, operation-routing, stage-consequence and architecture browser regressions passed.
+          - Progressed-campaign persistence A/B control: $CONTROL
+
+          ## Continuity boundary
+          This candidate is standalone on the canonical line. It does not import MARKET EYES / PAPER GHOSTS / QUIET CENSUS / RECONCILIATION WINDOW / AFTER THE COUNT or ZERO RECEIPT / PALISADE from separate noncanonical branches.
+
+          ## Unresolved continuity / next content target
+          The two durable next hooks are intentionally not consumed here. The strongest next slice is a route-sensitive follow-up: `second_signature_audit_echo` should surface the first administrative consequence of making the survivors correlatable, while `second_signature_claim_market` should make the Old Market haircut create an obligation or dispute rather than immediately reconverging the branches. Do not identify a larger conspiracy merely to escalate stakes; keep the consequence local and human first.
+
+          ## Build meta
+          ```json
+          $META
+          ```
+          EOF
+          cp "$ROOT/DEVELOPMENT_NOTE_PWA12_104_NARRATIVE_SECOND_SIGNATURE_CANDIDATE_01.md" out/
+
+      - name: Package and publish QA record
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE='Chrome_Requiem_v14_PWA_pwa12_104_NARRATIVE_SECOND_SIGNATURE_CANDIDATE_01'
+          mv "$ROOT" "$GITHUB_WORKSPACE/work/$CANDIDATE"
+          cd "$GITHUB_WORKSPACE/work"
+          zip -qr "$GITHUB_WORKSPACE/out/${CANDIDATE}_source.zip" "$CANDIDATE"
+          cd "$GITHUB_WORKSPACE"
+          sha256sum "out/${CANDIDATE}_source.zip" | tee out/SHA256.txt
+          DEST="$GITHUB_WORKSPACE/analysis/cr-pwa12-104-narrative-second-signature-candidate-01"
+          rm -rf "$DEST" && mkdir -p "$DEST"
+          cp out/BUILD_META.json out/DEVELOPMENT_NOTE_PWA12_104_NARRATIVE_SECOND_SIGNATURE_CANDIDATE_01.md out/static-regression.log out/second-signature-browser.log out/affected-flow-regression.log out/progressed-campaign-control.log out/SHA256.txt "$DEST/"
+          cp out/pwa12-104-second-signature-*.png "$DEST/"
+          git config user.name 'CR narrative automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add analysis/cr-pwa12-104-narrative-second-signature-candidate-01
+          git commit -m 'Publish PWA12.104 Second Signature candidate QA' || true
+          git push origin HEAD:main
+
+      - name: Upload candidate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-PWA12-104-Narrative-Second-Signature-Candidate-01
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
