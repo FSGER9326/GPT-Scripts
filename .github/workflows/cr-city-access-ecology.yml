@@ -74,7 +74,7 @@ jobs:
           python3 tools/rebundle_runtime.py
           python3 tests/pwa12_104_city_dynamic_disruptions_contract.py .
 
-      - name: Reapply City Candidate 04
+      - name: Reapply and validate City Candidate 04
         shell: bash
         run: |
           set -euo pipefail
@@ -85,6 +85,7 @@ jobs:
           python3 scripts/cr_city_multihop_browser_entry_patch.py "$ROOT"
           cd "$ROOT"
           python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-multihop-logistics-candidate.04'
           python3 tests/pwa12_104_city_multihop_logistics_contract.py .
 
       - name: Apply City Access Ecology Candidate 05
