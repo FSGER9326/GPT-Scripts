@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/cr-city-access-ecology.yml'
       - 'scripts/cr_city_access_ecology_patch.py'
+      - 'scripts/cr_city_access_ecology_patch_seam_fix.py'
       - 'scripts/cr_city_access_ecology_contract.py'
       - 'scripts/cr_city_access_ecology_browser.py'
       - 'scripts/cr_city_access_ecology_note.py'
@@ -92,6 +93,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 scripts/cr_city_access_ecology_patch_seam_fix.py scripts/cr_city_access_ecology_patch.py
           python3 scripts/cr_city_access_ecology_patch.py "$ROOT"
           cp scripts/cr_city_access_ecology_contract.py "$ROOT/tests/pwa12_104_city_access_ecology_contract.py"
           cp scripts/cr_city_access_ecology_browser.py "$ROOT/tests/pwa12_104_city_access_ecology_browser.py"
