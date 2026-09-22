@@ -59,20 +59,29 @@ if new_test not in t:
     if old_test not in t: raise SystemExit('Candidate 06 browser save/load seam missing')
     t=t.replace(old_test,new_test,1)
 
-# The normal street-combat launcher may pass through the canonical mission-entry wrapper.
-# Emit a one-run diagnostic if that wrapper does not immediately install activeMission so the
-# next repair is based on actual runtime behavior rather than guessing at the mission lifecycle.
+# The established street-combat bridge enters canonical V10 briefing first. Exercise that
+# player-facing lifecycle instead of assuming Game.activeMission exists before DEPLOY.
 old_combat="""    page.wait_for_function('()=>!!Game.activeMission?.v134StreetEncounter',timeout=5000)
     combat_done=page.evaluate('''()=>{const m=Game.activeMission,actor=m?.v134StreetActorType,ok=settleStreetCombatV134(m,true),a=activeInterdistrictDispatchV12104(),i=Game.livingStreetsV134.transitIncidents.active;return{ok,actor,phase:a?.phase,status:i?.status,clear:a?.transitIncidentClearances?.[i?.linkId]||null}}''')
 """
-new_combat="""    page.wait_for_timeout(600)
+new_combat="""    page.wait_for_function(\"()=>{const s=document.getElementById('v10-briefing');return s&&getComputedStyle(s).display!=='none'&&[...s.querySelectorAll('button')].some(b=>b.textContent.includes('DEPLOY'))}\",timeout=5000)
+    briefing=page.evaluate('''()=>{const s=document.getElementById('v10-briefing'),b=[...s.querySelectorAll('button')].find(x=>x.textContent.includes('DEPLOY'));return{screen:[...document.querySelectorAll('.screen')].find(x=>getComputedStyle(x).display!=='none')?.id||null,deploy:!!b,active:Game.activeMission?.id||null}}''')
+    assert briefing['screen']=='v10-briefing' and briefing['deploy'] and briefing['active'] is None,briefing
+    deployed=page.evaluate('''()=>{const s=document.getElementById('v10-briefing'),b=[...s.querySelectorAll('button')].find(x=>x.textContent.includes('DEPLOY'));if(!b)return false;b.click();return true}''')
+    assert deployed,briefing
+    page.wait_for_function('()=>!!Game.activeMission?.v134StreetEncounter',timeout=5000)
+    combat_done=page.evaluate('''()=>{const m=Game.activeMission,actor=m?.v134StreetActorType,ok=settleStreetCombatV134(m,true),a=activeInterdistrictDispatchV12104(),i=Game.livingStreetsV134.transitIncidents.active;return{ok,actor,phase:a?.phase,status:i?.status,clear:a?.transitIncidentClearances?.[i?.linkId]||null}}''')
+"""
+if new_combat not in t:
+    # Replace either the original expectation or the one-run diagnostic block.
+    diagnostic="""    page.wait_for_timeout(600)
     combat_entry=page.evaluate('''()=>({active:Game.activeMission?{id:Game.activeMission.id,v134:!!Game.activeMission.v134StreetEncounter}:null,screen:[...document.querySelectorAll('.screen')].find(x=>getComputedStyle(x).display!=='none')?.id||null,approach:Game.contractApproachesV134B?.plan?{ready:Game.contractApproachesV134B.plan.ready,missionId:Game.contractApproachesV134B.plan.missionId}:null,startType:typeof startMission,prevType:typeof V10PrevStartMission,visibleButtons:[...document.querySelectorAll('button')].filter(b=>getComputedStyle(b).display!=='none'&&b.offsetParent!==null).map(b=>b.textContent.trim()).filter(Boolean).slice(0,30),startSource:(typeof startMission==='function'?String(startMission).slice(0,1200):null),prevSource:(typeof V10PrevStartMission==='function'?String(V10PrevStartMission).slice(0,1200):null)} )''')
     print('CANDIDATE06 COMBAT ENTRY DIAGNOSTIC',combat_entry)
     assert combat_entry['active'] and combat_entry['active']['v134'],combat_entry
     combat_done=page.evaluate('''()=>{const m=Game.activeMission,actor=m?.v134StreetActorType,ok=settleStreetCombatV134(m,true),a=activeInterdistrictDispatchV12104(),i=Game.livingStreetsV134.transitIncidents.active;return{ok,actor,phase:a?.phase,status:i?.status,clear:a?.transitIncidentClearances?.[i?.linkId]||null}}''')
 """
-if new_combat not in t:
-    if old_combat not in t: raise SystemExit('Candidate 06 combat-entry browser seam missing')
-    t=t.replace(old_combat,new_combat,1)
+    if diagnostic in t:t=t.replace(diagnostic,new_combat,1)
+    elif old_combat in t:t=t.replace(old_combat,new_combat,1)
+    else: raise SystemExit('Candidate 06 combat-entry browser seam missing')
 test.write_text(t,encoding='utf-8')
-print('hardened Candidate 06 save/load physical route resumption and added canonical combat-entry diagnostic')
+print('hardened Candidate 06 save/load route resume and canonical V10 briefing/deploy combat lifecycle QA')
