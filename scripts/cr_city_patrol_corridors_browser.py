@@ -37,8 +37,13 @@ with sync_playwright() as pw:
     assert 'FAST' in ui['text'] and 'LOW PROFILE' in ui['text'] and 'BACK ALLEY' in ui['text'] and 'INTEL THIN' in ui['text'],ui
     page.screenshot(path=str(ROOT/'qa/pwa12-104-city-patrol-corridors-mobile.png'),full_page=True)
 
-    commit=page.evaluate('''q=>{const before={x:Game.ovPlayer.x,y:Game.ovPlayer.y};const b=[...document.querySelectorAll('#v12104-patrol-route-panel .pr-choice')].find(x=>x.dataset.mode===q.mode);b.click();const plan=currentPatrolRoutePlanV12104();return{before,after:{x:Game.ovPlayer.x,y:Game.ovPlayer.y},path:Game.pendingPath?.length||0,target:Game._v133TravelTarget,plan,preference:Game.livingStreetsV134.patrolCorridors.preference,stats:{...Game.livingStreetsV134.patrolCorridors.stats}}}''',setup)
-    assert commit['path']>1 and commit['before']==commit['after'],commit
+    commit=page.evaluate('''q=>{const before={x:Game.ovPlayer.x,y:Game.ovPlayer.y};const b=[...document.querySelectorAll('#v12104-patrol-route-panel .pr-choice')].find(x=>x.dataset.mode===q.mode);b.click();const plan=currentPatrolRoutePlanV12104();return{before,after:{x:Game.ovPlayer.x,y:Game.ovPlayer.y},goal:q.goal,path:Game.pendingPath?.length||0,target:Game._v133TravelTarget,plan,preference:Game.livingStreetsV134.patrolCorridors.preference,stats:{...Game.livingStreetsV134.patrolCorridors.stats}}}''',setup)
+    assert commit['path']>1,commit
+    # Canonical route commitment wakes the overworld scheduler immediately. It may legally consume
+    # one physical street step before this evaluate() returns; what must never happen is a jump to goal.
+    commit_tick=((commit['after']['x']-commit['before']['x'])**2+(commit['after']['y']-commit['before']['y'])**2)**0.5
+    commit_goal=((commit['after']['x']-commit['goal']['x'])**2+(commit['after']['y']-commit['goal']['y'])**2)**0.5
+    assert commit_tick<=1.5 and commit_goal>1.7,commit
     assert commit['plan']['mode']==setup['mode'] and commit['preference']==setup['mode'],commit
     assert commit['target']['kind']=='location' and commit['target']['id']==setup['goalId'],commit
 
@@ -53,12 +58,16 @@ with sync_playwright() as pw:
     assert restored['ok'] and restored['preference']==setup['mode'],restored
     assert sum(sum(v.values()) for v in restored['familiarity'].values())>0,restored
 
-    resumed=page.evaluate('''q=>{Game.livingStreetsV134.lastEventStep=Game.livingStreetsV134.stepCount+999999;const before={x:Game.ovPlayer.x,y:Game.ovPlayer.y},ok=routeToLocationV133(q.startId),plan=currentPatrolRoutePlanV12104();return{ok,before,after:{x:Game.ovPlayer.x,y:Game.ovPlayer.y},path:Game.pendingPath?.length||0,plan,preference:Game.livingStreetsV134.patrolCorridors.preference}}''',setup)
-    assert resumed['ok'] and resumed['path']>1 and resumed['before']==resumed['after'],resumed
+    resumed=page.evaluate('''q=>{Game.livingStreetsV134.lastEventStep=Game.livingStreetsV134.stepCount+999999;const before={x:Game.ovPlayer.x,y:Game.ovPlayer.y},goal=currentDistrictV133().locations[q.startId],ok=routeToLocationV133(q.startId),plan=currentPatrolRoutePlanV12104();return{ok,before,after:{x:Game.ovPlayer.x,y:Game.ovPlayer.y},goal:{x:goal.x,y:goal.y},path:Game.pendingPath?.length||0,plan,preference:Game.livingStreetsV134.patrolCorridors.preference}}''',setup)
+    assert resumed['ok'] and resumed['path']>1,resumed
+    resumed_tick=((resumed['after']['x']-resumed['before']['x'])**2+(resumed['after']['y']-resumed['before']['y'])**2)**0.5
+    resumed_goal=((resumed['after']['x']-resumed['goal']['x'])**2+(resumed['after']['y']-resumed['goal']['y'])**2)**0.5
+    assert resumed_tick<=1.5 and resumed_goal>1.7,resumed
     assert resumed['plan'] and resumed['plan']['mode']==setup['mode'] and resumed['preference']==setup['mode'],resumed
 
     switched=page.evaluate('''()=>{const before={x:Game.ovPlayer.x,y:Game.ovPlayer.y},ok=switchPatrolRouteProfileV12104('fast'),plan=currentPatrolRoutePlanV12104();return{ok,before,after:{x:Game.ovPlayer.x,y:Game.ovPlayer.y},path:Game.pendingPath?.length||0,plan,stats:{...Game.livingStreetsV134.patrolCorridors.stats}}}''')
-    assert switched['ok'] and switched['before']==switched['after'] and switched['path']>1,switched
+    switched_tick=((switched['after']['x']-switched['before']['x'])**2+(switched['after']['y']-switched['before']['y'])**2)**0.5
+    assert switched['ok'] and switched_tick<=1.5 and switched['path']>1,switched
     assert switched['plan']['mode']=='fast' and switched['stats']['switched']>=1,switched
     assert not errors,errors
     print('PASS Candidate 08 browser: 390x844 route planner, distinct risk-aware physical routes, no teleport, canonical scheduler movement, learned route familiarity, save/load preference persistence, programmatic routing and in-motion profile switching')
