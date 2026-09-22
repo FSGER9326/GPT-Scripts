@@ -1,0 +1,27 @@
+name: CR City Candidate 04
+on:
+  push:
+    branches: [chrome-requiem-city-candidate-04]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch canonical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 2 --connect-timeout 20 'https://drive.usercontent.google.com/download?id=1xVH-PyEtwwqUOK36vZ2TQDAiYrGhZqyk&export=download&confirm=t' -o canonical.zip
+          python3 - <<'PY'
+          import zipfile
+          z=zipfile.ZipFile('canonical.zip')
+          print('ZIP_OK',len(z.namelist()))
+          PY
+      - name: Audit city architecture
+        run: python3 tools/cr_city_audit.py canonical.zip cr_city_audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cr-city-audit
+          path: cr_city_audit.json
