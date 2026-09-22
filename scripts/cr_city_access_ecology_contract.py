@@ -13,7 +13,7 @@ checks={
  'five transit families':all(x in mod for x in ["l.type==='metro'","l.type==='border'","l.type==='freight'","l.type==='security'","l.type==='hidden'"]),
  'dynamic lock states':all(x in mod for x in ['FACTION LOCKDOWN','METRO ID SWEEP','STREET LOCKDOWN']),
  'dynamic soft states':all(x in mod for x in ['CARGO TOLL','STREET LEVY','PLATFORM SCREENING','FRIENDLY CORRIDOR','COVERT BYPASS']),
- 'physical contact sponsorship':'sourceContact' in mod and "a.phase==='choose_transit'" in mod and 'Math.hypot' in mod,
+ 'physical contact sponsorship':'sourceContact' in mod and "phase==='choose_transit'" in mod and 'Math.hypot' in mod,
  'trust is real cost':"changeContactTrustV13?.(c.id,-3,'Sponsored city transit access')" in mod,
  'sponsor persisted in active dispatch':'accessEcologySponsors' in mod and 'saveGame?.(0,true)' in mod,
  'persistent ecology history':'livingStreetsV134' in mod and 'accessEcology' in mod and 'history' in mod,
