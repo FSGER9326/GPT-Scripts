@@ -1,10 +1,93 @@
 name: CR Procedural Candidate 04 Integration
 on:
+  push:
+    branches: [agent/cr-procedural-c04-integration-20260922]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  placeholder:
+  build-test-package:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - run: echo "Candidate 04 tooling staging"
+      - uses: actions/checkout@v4
+      - name: Download cumulative Candidate 03 and Candidate 04 module
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads work out
+          curl -fL --retry 3 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-8d10-820a-ac09-01d5b7cfbecc/raw?se=2026-09-22T01%3A37%3A37Z&sp=r&sv=2026-02-06&sr=b&scid=afa2b755-ab6e-5105-809c-e5657bd241c4&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A35%3A22Z&ske=2026-09-22T21%3A35%3A22Z&sks=b&skv=2026-02-06&sig=2Qz3KS701CgRmO9zUc4zMQdf1yab3ECHdbF/MO/jSnI%3D' -o downloads/candidate03.zip
+          curl -fL --retry 3 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-68bc-820a-9113-60f02d640dbb/raw?se=2026-09-22T01%3A37%3A44Z&sp=r&sv=2026-02-06&sr=b&scid=d7351482-8585-5124-9ec8-1f7b74e89e99&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A48%3A13Z&ske=2026-09-22T21%3A48%3A13Z&sks=b&skv=2026-02-06&sig=fOeGYXjnEUp9%2BYoYHZL1YVDixm%2Bdd9XWQAILNZbutYM%3D' -o downloads/procedural-complications-v14.js
+          unzip -q downloads/candidate03.zip -d work
+          python3 - <<'PY'
+          import json
+          m=json.load(open('work/cr_proc_route_candidate_03/build-meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-procedural-egress-route-candidate.03',m
+          PY
+      - name: Integrate and rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=work/cr_proc_route_candidate_03
+          python3 scripts/cr_proc_c04_patch.py "$ROOT" downloads/procedural-complications-v14.js
+          cp scripts/pwa12_104_procedural_complication_contract.mjs "$ROOT/tests/"
+          cp scripts/pwa12_104_procedural_complication_browser.py "$ROOT/tests/"
+          cd "$ROOT"
+          node --check src/missions/procedural-complications-v14.js
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-procedural-complication-intel-candidate.04'
+          node --check src/runtime/runtime-bundle.js
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build-meta.json'));assert m['version']=='14.0.0-pwa.12.104-procedural-complication-intel-candidate.04',m
+          b=open('src/runtime/runtime-bundle.js',encoding='utf-8').read();a=b.index('SOURCE: src/missions/multistage-operations-v14.js');c=b.index('SOURCE: src/missions/procedural-complications-v14.js');d=b.index('SOURCE: src/visuals/visual-identity-v13-6.js');assert a<c<d and b.count('SOURCE: src/missions/procedural-complications-v14.js')==1
+          print('PASS Candidate 04 ordered runtime',m)
+          PY
+      - name: Prepare Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          P=$(python3 -c "from playwright.sync_api import sync_playwright;p=sync_playwright().start();print(p.chromium.executable_path);p.stop()")
+          sudo ln -sf "$P" /usr/bin/chromium
+      - name: Procedural contracts
+        working-directory: work/cr_proc_route_candidate_03
+        shell: bash
+        run: |
+          set -euo pipefail
+          { node tests/pwa12_104_procedural_complication_contract.mjs src/missions/procedural-complications-v14.js; node tests/pwa12_104_procedural_faction_composition_contract.mjs; node tests/pwa12_104_procedural_optional_clause_contract.mjs; node tests/pwa12_104_procedural_optional_clause_tactical_contract.mjs; node tests/pwa12_104_procedural_egress_route_contract.mjs; node tests/pwa12_104_procedural_egress_route_tactical_contract.mjs; } | tee ../../out/contract-tests.log
+      - name: Persistence multistage and release regressions
+        working-directory: work/cr_proc_route_candidate_03
+        shell: bash
+        run: |
+          set -euo pipefail
+          { python3 tests/pwa12_31_save_recovery_contract.py; python3 tests/pwa12_62_safe_load_menu_contract.py; python3 tests/pwa12_44_multistage_contract.py; python3 tests/pwa12_45_stage_consequences_contract.py; python3 tests/pwa12_52_objective_priority_contract.py; node tests/pwa12_68_intel_followup_contract.mjs; node tests/pwa12_71_inflight_save_load_contract.mjs; python3 tests/pwa11_manifest_contract.py; node tests/pwa11_service_worker.test.mjs; } | tee ../../out/regression-tests.log
+      - name: Candidate 04 Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/pwa12_104_procedural_complication_browser.py work/cr_proc_route_candidate_03 | tee out/candidate04-browser.log
+      - name: Inherited procedural Chromium
+        working-directory: work/cr_proc_route_candidate_03
+        shell: bash
+        run: |
+          set -euo pipefail
+          { python3 tests/pwa12_104_procedural_faction_transition_browser.py; python3 tests/pwa12_104_procedural_optional_clause_browser.py; python3 tests/pwa12_104_procedural_egress_route_browser.py; } | tee ../../out/inherited-browser.log
+      - name: Package Candidate 04
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=work/cr_proc_route_candidate_03
+          python3 scripts/cr_proc_c04_write_note.py "$ROOT" out
+          cp "$ROOT"/qa/candidate04_complication_*.png out/
+          C='Chrome_Requiem_v14_PWA_pwa12_104_PROCEDURAL_COMPLICATION_INTEL_CANDIDATE_04'
+          mv "$ROOT" "work/$C"
+          (cd work && zip -qr "../out/${C}_source.zip" "$C")
+          sha256sum "out/${C}_source.zip" | tee out/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-PWA12-104-Procedural-Complication-Candidate-04
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
