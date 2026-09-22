@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work out
-          curl -fL --retry 3 'https://sdmntpreastus2.oaiusercontent.com/files/00000000-2f60-81f6-a264-49359bb612dd/raw?se=2026-09-22T05%3A29%3A49Z&sp=r&sv=2026-02-06&sr=b&scid=70ea9b8b-e010-570a-82e6-4a914034c065&skoid=c36a4874-d531-4a8d-99fc-7da0d9143d9c&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A25%3A47Z&ske=2026-09-22T23%3A25%3A47Z&sks=b&skv=2026-02-06&sig=y9hMKlcoCs0/XZB8dOES1mFbzRrA9K5WmmuzS%2Bl13pU%3D' -o canonical.zip
+          curl -fL --retry 3 'https://sdmntpreastus2.oaiusercontent.com/files/00000000-7390-81f6-90ea-5ac141707815/raw?se=2026-09-22T05%3A31%3A43Z&sp=r&sv=2026-02-06&sr=b&scid=6a5952da-14d5-5864-9f7c-34a8700752a1&skoid=31bc9c1a-c7e0-460a-8671-bf4a3c419305&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A14%3A41Z&ske=2026-09-22T23%3A14%3A41Z&sks=b&skv=2026-02-06&sig=KQMSF/e/ll7tOYmqAr9ov24S5Hxlt16GArLfsVPSePY%3D' -o canonical.zip
           unzip -q canonical.zip -d work
           test "$(python3 -c "import json;print(json.load(open('work/cr103/build-meta.json'))['version'])")" = '14.0.0-pwa.12.104-street-contact-support'
           test "$(python3 -c "import json;print(json.load(open('work/cr103/build-meta.json'))['schemaVersion'])")" = '14'
@@ -40,8 +40,43 @@ jobs:
           from pathlib import Path
           p=Path('work/cr103/src/runtime/legacy-save-bridge.js')
           s=p.read_text()
-          old='try{payload=capturePayload()}catch(err){\n       console.warn(\'[CR14] save snapshot capture failed:\',err?.message||err);'
-          new='try{payload=JSON.parse(serialize())}catch(err){\n       console.warn(\'[CR14] save snapshot capture failed:\',err?.message||err);'
+          old=''' function capturePayload(){return JSON.parse(serialize())}
+ function commitSave(slot=0,quiet=true){
+   const n=Number(slot),ok=legacySave(n,quiet);
+   if(ok!==false){
+     let payload;
+     try{payload=capturePayload()}catch(err){
+       console.warn('[CR14] save snapshot capture failed:',err?.message||err);
+       return ok;
+     }
+     queue(()=>persistSnapshot(n,payload));
+   }
+   return ok;
+ }
+ function save(slot=0,quiet=true){
+   // A compatibility loader may issue migration/reconstruction autosaves while a load
+   // is only half applied. Hold those writes until commit; on rollback they disappear.
+   if(loadTransaction){loadTransaction.saves.push({slot:Number(slot),quiet:!!quiet});return true}
+   return commitSave(slot,quiet);
+ }
+'''
+          new=''' function capturePayload(){return JSON.parse(serialize())}
+ function save(slot=0,quiet=true){
+   // A compatibility loader may issue migration/reconstruction autosaves while a load
+   // is only half applied. Hold those writes until commit; on rollback they disappear.
+   if(loadTransaction){loadTransaction.saves.push({slot:Number(slot),quiet:!!quiet});return true}
+   const n=Number(slot),ok=legacySave(n,quiet);
+   if(ok!==false){
+     let payload;
+     try{payload=JSON.parse(serialize())}catch(err){
+       console.warn('[CR14] save snapshot capture failed:',err?.message||err);
+       return ok;
+     }
+     queue(()=>persistSnapshot(n,payload));
+   }
+   return ok;
+ }
+'''
           assert old in s
           p.write_text(s.replace(old,new,1))
           PY
