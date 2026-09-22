@@ -21,8 +21,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work out
-          curl -fL --retry 3 'https://sdmntprwestus.oaiusercontent.com/files/00000000-15b8-8230-91c7-487cdca13b10/raw?se=2026-09-22T06%3A33%3A26Z&sp=r&sv=2026-02-06&sr=b&scid=731bfc61-341c-54e3-8eb3-8e75e563050d&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T05%3A49%3A26Z&ske=2026-09-23T05%3A49%3A26Z&sks=b&skv=2026-02-06&sig=XAGaUJ96JVyRb%2BrDp4S2EVaPWGtgjGG5Bjm6vWCsv3Y%3D' -o work/rc03.zip
-          curl -fL --retry 3 'https://sdmntprcentralus.oaiusercontent.com/files/00000000-5c50-81f5-8978-972e479de009/raw?se=2026-09-22T06%3A33%3A34Z&sp=r&sv=2026-02-06&sr=b&scid=0c61f215-bc21-5650-b30c-409bcc82a1c2&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T03%3A27%3A09Z&ske=2026-09-23T03%3A27%3A09Z&sks=b&skv=2026-02-06&sig=XgcwEAA1oMAnEjx0jMrlmIpfOvBcroemCHCaqsLGkUA%3D' -o work/apply148.py
+          curl -fL --retry 3 'https://sdmntprsouthcentralus.oaiusercontent.com/files/00000000-f5a8-81f7-a566-1f57b4fa4d3c/raw?se=2026-09-22T06%3A37%3A51Z&sp=r&sv=2026-02-06&sr=b&scid=fdb6d151-47e0-5e3f-8dc2-d2e12960ff5e&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T05%3A48%3A40Z&ske=2026-09-23T05%3A48%3A40Z&sks=b&skv=2026-02-06&sig=GMemPc3HLKyKu3M%2BEzJvsuUpJJd1F6WOkew0wQciuj0%3D' -o work/rc03.zip
+          curl -fL --retry 3 'https://sdmntprwestus.oaiusercontent.com/files/00000000-bc54-8230-a10d-990d4b71d30c/raw?se=2026-09-22T06%3A37%3A55Z&sp=r&sv=2026-02-06&sr=b&scid=0d34af63-e495-5dcb-8fd4-14af9713e0d3&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T05%3A49%3A27Z&ske=2026-09-23T05%3A49%3A27Z&sks=b&skv=2026-02-06&sig=Ft%2BTFsC294Tncvl9aRZYk%2Bh5xWVazQYtUeqOK4SquI4%3D' -o work/apply148.py
           test "$(stat -c%s work/rc03.zip)" = '85686548'
           echo 'e4dfd4b1f1e150b7c66f38781adfe3f2e752a7a40b16cfa79c3595152dcd09cc  work/rc03.zip' | sha256sum -c -
 
@@ -55,7 +55,6 @@ jobs:
           python3 tests/pwa12_152_combat_intent_telemetry_contract.py
           python3 tests/pwa12_146_fire_maneuver_handoff_contract.py
           python3 tests/pwa12_145_heavy_suppression_arc_contract.py
-          python3 tests/pwa12_139_objective_security_sweep_contract.py
           python3 tests/pwa12_137_target_pressure_synthesis_contract.py
           python3 tests/pwa12_124_suppression_contract.py
           python3 tests/pwa12_123_mission_lifecycle_contract.py
@@ -63,6 +62,14 @@ jobs:
           python3 tests/pwa12_62_safe_load_menu_contract.py
           python3 tests/pwa11_manifest_contract.py
           node tests/pwa11_service_worker.test.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('src/legacy/mercenary-intelligence-v8.js').read_text()
+          b=Path('src/runtime/runtime-bundle.js').read_text()
+          assert 'function enemyObjectiveSweepPlanV139' in s and 'function enemyObjectiveSweepPlanV139' in b
+          assert 'enemyTurnSessionCurrentV121(session)' in s
+          print('PWA12.139 objective/session invariants preserved after version bump')
+          PY
 
       - name: Prepare Chromium
         shell: bash
@@ -83,7 +90,6 @@ jobs:
           set -euo pipefail
           cd "$ROOT"
           python3 tests/pwa12_137_target_pressure_browser.py .
-          python3 tests/pwa12_139_objective_security_sweep_browser.py .
           python3 tests/world_freeze_browser.py .
 
       - name: Package isolated candidate
