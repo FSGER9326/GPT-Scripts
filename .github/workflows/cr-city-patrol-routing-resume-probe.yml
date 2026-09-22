@@ -1,0 +1,57 @@
+name: CR City Patrol Routing Resume Probe
+
+on:
+  push:
+    branches: [chrome-requiem-city-patrol-routing-08]
+    paths:
+      - '.github/workflows/cr-city-patrol-routing-resume-probe.yml'
+      - 'scripts/cr_city_patrol_routing_resume_probe.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore verified Candidate 07 artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p a work
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10684992438/zip > a.zip
+          unzip -q a.zip -d a
+          INNER=$(find a -maxdepth 1 -name '*CITY_CONTROL_POSTS_CANDIDATE_07_source.zip' -print -quit)
+          test -n "$INNER"
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name '*CITY_CONTROL_POSTS_CANDIDATE_07*' -print -quit)
+          test -n "$ROOT"
+          echo "ROOT=$(realpath "$ROOT")" >> "$GITHUB_ENV"
+      - name: Apply Candidate 08 only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_patrol_routing_patch.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-patrol-routing-candidate.08'
+          node --check src/world/patrol-routing-pwa12-104-city-candidate-08.js
+      - name: Prepare Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          P=$(python3 -c "from playwright.sync_api import sync_playwright;p=sync_playwright().start();print(p.chromium.executable_path);p.stop()")
+          sudo ln -sf "$P" /usr/bin/chromium
+      - name: Probe route persistence lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_patrol_routing_resume_probe.py "$ROOT"
