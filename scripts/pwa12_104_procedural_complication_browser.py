@@ -6,6 +6,7 @@ ROOT=Path(sys.argv[1]).resolve();QA=ROOT/'qa';QA.mkdir(parents=True,exist_ok=Tru
 HTML=(ROOT/'index.html').read_text(encoding='utf-8')
 SHIM="""<script>const __s=new Map();const __ls={getItem:k=>__s.has(String(k))?__s.get(String(k)):null,setItem:(k,v)=>__s.set(String(k),String(v)),removeItem:k=>__s.delete(String(k)),clear:()=>__s.clear(),key:i=>[...__s.keys()][i]??null,get length(){return __s.size}};Object.defineProperty(window,'localStorage',{value:__ls,configurable:true});Object.defineProperty(window,'sessionStorage',{value:__ls,configurable:true});</script>"""
 HTML=HTML.replace('<head>','<head><base href="http://cr.local/">'+SHIM,1).replace('bootChromeRequiemV14({registerPwa:true})','bootChromeRequiemV14({registerPwa:false})')
+QUIET_APPROACH='v134b_ap_forged'
 
 def open_game(browser):
  p=browser.new_page(viewport={'width':1280,'height':900},device_scale_factor=1);errors=[];missing=[];p.on('pageerror',lambda e:errors.append(e.stack or str(e)))
@@ -23,11 +24,11 @@ def setup(p,label):
 
 def brief(p,d):
  p.locator(f'#v13-contracts [data-m="{d["id"]}"]').click(timeout=8000);p.wait_for_function("()=>Game.screen==='v10-briefing'&&!!Game.pendingMission",timeout=8000)
- q=p.evaluate('''()=>({id:Game.pendingMission.id,reward:Game.pendingMission.reward,xp:Game.pendingMission.xp,q:Game.pendingMission.v140Complication,text:document.querySelector('.v140-complication-brief')?.textContent||'',service:!!document.querySelector('.v134b-approach[data-id="v134b_ap_service"]:not([disabled])')})''')
- assert q['id']==d['id'] and q['reward']==d['before']['reward'] and q['xp']==d['before']['xp'],q;assert q['q']['enabled'] and 'RISK ' in q['text'] and 'MITIGATION' in q['text'] and q['service'],q;return q
+ q=p.evaluate('''()=>({id:Game.pendingMission.id,reward:Game.pendingMission.reward,xp:Game.pendingMission.xp,q:Game.pendingMission.v140Complication,text:document.querySelector('.v140-complication-brief')?.textContent||'',forged:!!document.querySelector('.v134b-approach[data-id="v134b_ap_forged"]:not([disabled])')})''')
+ assert q['id']==d['id'] and q['reward']==d['before']['reward'] and q['xp']==d['before']['xp'],q;assert q['q']['enabled'] and 'RISK ' in q['text'] and 'MITIGATION' in q['text'] and q['forged'],q;return q
 
 def stage(p,d):
- p.locator('.v134b-approach[data-id="v134b_ap_service"]').click(timeout=5000);p.locator('#v10-brief-deploy').click(timeout=5000);p.wait_for_function('(id)=>Game.contractApproachesV134B?.plan?.missionId===id',arg=d['id'],timeout=5000)
+ p.locator(f'.v134b-approach[data-id="{QUIET_APPROACH}"]').click(timeout=5000);p.locator('#v10-brief-deploy').click(timeout=5000);p.wait_for_function('(id)=>Game.contractApproachesV134B?.plan?.missionId===id',arg=d['id'],timeout=5000)
  r=p.evaluate('''()=>{const n=currentPlannedNodeV134B();if(!n)return{error:'no node'};Game.ovPlayer={x:n.x,y:n.y};return{ok:completeMissionApproachV134B({kind:'v134b',id:n.id}),id:n.id,ready:Game.contractApproachesV134B?.plan?.ready}}''');assert not r.get('error') and r['ok'] and r['ready'],r;p.wait_for_selector('#v134b-stage-modal.open #v134b-stage-deploy',timeout=5000)
 
 def deploy(p,d):
@@ -44,10 +45,10 @@ def run(browser,mitigated):
  stage(p,d)
  if not mitigated:
   lock=p.evaluate('''(id)=>{const m=Game.contacts.flatMap(c=>c.missions||[]).find(x=>x.id===id),cash=Game.credits,r=mitigateComplicationV140(m);return{r,cash,after:Game.credits,locked:mitigationLockedV140(m),mitigated:m.v140Complication.mitigated}}''',d['id']);assert lock['locked'] and lock['r'] is False and lock['cash']==lock['after'] and not lock['mitigated'],lock
- c=deploy(p,d);assert c['approach']=='v134b_ap_service' and c['staged'] and c['reward']==d['before']['reward'] and c['xp']==d['before']['xp'],c
+ c=deploy(p,d);assert c['approach']==QUIET_APPROACH and c['staged'] and c['reward']==d['before']['reward'] and c['xp']==d['before']['xp'],c
  if mitigated:assert c['alerted'] is False and not c['q'].get('runtimeTriggered',False) and c['aware'] and all(x['a']==0 and not x['on'] for x in c['aware']),c
- else:assert c['alerted'] and c['q'].get('runtimeTriggered') is True and c['q'].get('runtimeApproach')=='v134b_ap_service' and c['aware'] and all(x['a']==100 and x['on'] for x in c['aware']),c
+ else:assert c['alerted'] and c['q'].get('runtimeTriggered') is True and c['q'].get('runtimeApproach')==QUIET_APPROACH and c['aware'] and all(x['a']==100 and x['on'] for x in c['aware']),c
  p.screenshot(path=str(QA/('candidate04_complication_mitigated_combat.png' if mitigated else 'candidate04_complication_unmitigated_combat.png')),full_page=True);assert not errors and not missing,(errors,missing);p.close();return c
 
 with sync_playwright() as pw:
- b=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage']);u=run(b,False);m=run(b,True);print('PASS procedural complication browser transitions',{'unmitigated':{'id':u['id'],'kind':u['q']['kind'],'alerted':u['alerted'],'shape':u['shape']},'mitigated':{'id':m['id'],'kind':m['q']['kind'],'cost':m['q']['mitigationPaid'],'alerted':m['alerted'],'shape':m['shape']}},flush=True);b.close()
+ b=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage']);u=run(b,False);m=run(b,True);print('PASS procedural complication browser transitions',{'unmitigated':{'id':u['id'],'kind':u['q']['kind'],'approach':u['approach'],'alerted':u['alerted'],'shape':u['shape']},'mitigated':{'id':m['id'],'kind':m['q']['kind'],'cost':m['q']['mitigationPaid'],'approach':m['approach'],'alerted':m['alerted'],'shape':m['shape']}},flush=True);b.close()
