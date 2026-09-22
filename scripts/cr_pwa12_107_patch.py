@@ -13,9 +13,6 @@ new=r'''function installLegacySaveBridge({target=globalThis,persistence,storage=
  if(!persistence)throw new TypeError('persistence required');
  if(!storage)throw new TypeError('storage required');
  const legacySave=target.saveGame?.bind(target);
- // Capture the currently installed compatibility load entry point first. Future layers
- // (operation checkpoints, migrations, recovery shims) must not be bypassed merely
- // because the historical v13.5 symbol is still present on window.
  const legacyLoad=(target.loadGame||target.loadGameV135)?.bind(target);
  const serialize=target.serializeGame?.bind(target);
  if(!legacySave||!legacyLoad||!serialize)throw new TypeError('legacy save/load/serialize functions required');
@@ -28,23 +25,20 @@ new=r'''function installLegacySaveBridge({target=globalThis,persistence,storage=
    return envelope;
  }
  function capturePayload(){return JSON.parse(serialize())}
- function commitSave(slot=0,quiet=true){
+ function save(slot=0,quiet=true){
+   // Compatibility reconstruction may autosave while hydration is incomplete.
+   // Buffer those writes until transaction commit; discard them on rollback.
+   if(loadTransaction){loadTransaction.saves.push({slot:Number(slot),quiet:!!quiet});return true}
    const n=Number(slot),ok=legacySave(n,quiet);
    if(ok!==false){
      let payload;
-     try{payload=capturePayload()}catch(err){
+     try{payload=JSON.parse(serialize())}catch(err){
        console.warn('[CR14] save snapshot capture failed:',err?.message||err);
        return ok;
      }
      queue(()=>persistSnapshot(n,payload));
    }
    return ok;
- }
- function save(slot=0,quiet=true){
-   // A compatibility loader may issue migration/reconstruction autosaves while a load
-   // is only half applied. Hold those writes until commit; on rollback they disappear.
-   if(loadTransaction){loadTransaction.saves.push({slot:Number(slot),quiet:!!quiet});return true}
-   return commitSave(slot,quiet);
  }
  target.saveGame=save;
 
@@ -57,8 +51,7 @@ new=r'''function installLegacySaveBridge({target=globalThis,persistence,storage=
    if(typeof Date!=='undefined'&&value instanceof Date)return new Date(value.getTime());
    if(typeof ArrayBuffer!=='undefined'&&ArrayBuffer.isView?.(value)){try{return value.slice?value.slice():new value.constructor(value)}catch{return value}}
    const proto=Object.getPrototypeOf(value);
-   // DOM/canvas/host objects, class instances and weak collections remain exact live
-   // references. Plain gameplay state is cloned recursively with shared identity kept.
+   // Preserve host objects/class instances by identity; clone plain gameplay graphs.
    if(proto!==Object.prototype&&proto!==null)return value;
    const out=Object.create(proto);seen.set(value,out);
    for(const key of Object.keys(value)){try{out[key]=cloneRollbackValue(value[key],seen)}catch{out[key]=value[key]}}
@@ -102,8 +95,6 @@ new=r'''function installLegacySaveBridge({target=globalThis,persistence,storage=
    try{if(screen!=='combat'&&typeof target.updateOverworldHUD==='function')target.updateOverworldHUD()}catch{}
  }
  async function resolveEnvelope(slot=0){
-   // Loads wait for all save writes already requested before resolution. A failed write
-   // does not suppress recovery from the prior valid backup.
    try{await pending}catch(err){
      console.warn('[CR14] pending save failed before load; attempting last valid recovery point:',err?.message||err);
    }
@@ -116,8 +107,7 @@ new=r'''function installLegacySaveBridge({target=globalThis,persistence,storage=
    return backup;
  }
  function commitBufferedSaves(requests){
-   // Every load-time save observes the committed hydrated state. Coalesce repeated
-   // reconstruction autosaves per slot and avoid re-entering legacy idle-save timers.
+   // Every reconstruction autosave observes only the committed hydrated state.
    const slots=new Map();for(const r of requests)slots.set(Number(r.slot),r);
    for(const [slot] of slots){
      let payload;try{payload=capturePayload()}catch(err){console.warn('[CR14] post-load save snapshot failed:',err?.message||err);continue}
@@ -146,8 +136,7 @@ new=r'''function installLegacySaveBridge({target=globalThis,persistence,storage=
    }finally{if(loadTransaction===txn)loadTransaction=null}
  }
  function load(slot=0){
-   // One hydration transaction at a time. A second load starts only after the first has
-   // committed or rolled back, preventing compatibility wrappers from interleaving.
+   // Serialize hydration so two compatibility loaders can never interleave mutations.
    const run=()=>runLoad(Number(slot));
    const result=loadTail.then(run,run);
    loadTail=result.then(()=>undefined,()=>undefined);
