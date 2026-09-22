@@ -31,3 +31,4 @@ failed=[k for k,v in checks.items() if not v]
 for k,v in checks.items(): print(('PASS' if v else 'FAIL'),k)
 if failed: raise SystemExit('contract failures: '+', '.join(failed))
 print(f'PASS interdistrict logistics contract: {len(checks)} checks')
+# Kept intentionally deterministic; this contract is also the PR workflow synchronization sentinel.
