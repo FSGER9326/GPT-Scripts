@@ -1,0 +1,79 @@
+name: CR PWA12.107 Persistence Transaction
+
+on:
+  push:
+    branches: [cr-persistence-pwa12-107]
+    paths: ['.github/workflows/cr-persistence-107.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout tooling
+        uses: actions/checkout@v4
+      - name: Download exact PWA12.104 canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 'https://sdmntpreastus2.oaiusercontent.com/files/00000000-d750-81f6-9960-1cc653f74a96/raw?se=2026-09-22T05%3A16%3A21Z&sp=r&sv=2026-02-06&sr=b&scid=6011dee6-625b-5bb7-88b2-cb359249d0f2&skoid=31bc9c1a-c7e0-460a-8671-bf4a3c419305&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A22%3A07Z&ske=2026-09-22T23%3A22%3A07Z&sks=b&skv=2026-02-06&sig=l31pESn/k9wnKAysyq8FNDp78fMMVQSF6QUuKwNoC74%3D' -o canonical.zip
+          mkdir -p work out
+          unzip -q canonical.zip -d work
+          ROOT=$(find work -name build-meta.json -printf '%h\n' | head -1)
+          test -n "$ROOT"
+          echo "$ROOT" > root.txt
+          python3 - <<'PY'
+          import json, pathlib
+          root=pathlib.Path(open('root.txt').read().strip())
+          meta=json.loads((root/'build-meta.json').read_text())
+          print('BUILD_META',json.dumps(meta,sort_keys=True))
+          assert meta['schemaVersion']==14
+          assert 'pwa.12.104' in meta['version']
+          PY
+      - name: Inspect persistence and runtime boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=$(cat root.txt)
+          python3 - "$ROOT" <<'PY' | tee out/PERSISTENCE_AUDIT.txt
+          import pathlib,re,sys,json
+          root=pathlib.Path(sys.argv[1])
+          pats=re.compile(r'(persist|save|load|storage|indexed|migrat|serial|checkpoint|snapshot|backup|recovery|legacy-save)',re.I)
+          text_ext={'.js','.mjs','.json','.html','.md','.py'}
+          files=[p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in text_ext]
+          relevant=[p for p in files if pats.search(str(p.relative_to(root)))]
+          print('=== RELEVANT PATHS ===')
+          for p in relevant: print(p.relative_to(root))
+          line_re=re.compile(r'(saveGame|loadGame|serializeGame|deserialize|hydrate|restore|rollback|mutex|queue|IndexedDB|indexedDB|localStorage|rngState|operationCheckpoint|activeOperation|combat|checkpoint|schemaVersion|checksum|saveBackups|fallback_slot|fallback_backup)',re.I)
+          print('\n=== SYMBOL/STATE HITS ===')
+          for p in files:
+            try: lines=p.read_text(errors='replace').splitlines()
+            except: continue
+            hits=[]
+            for i,line in enumerate(lines,1):
+              if line_re.search(line): hits.append((i,line[:500]))
+            if hits:
+              print(f'\n--- {p.relative_to(root)} ({len(hits)} hits) ---')
+              for i,line in hits[:80]: print(f'{i}: {line}')
+          print('\n=== FULL KEY FILES ===')
+          key_names={'save-envelope.js','legacy-save-bridge.js','save-transfer.js','persistence.js','indexeddb-adapter.js','migration.js','state.js'}
+          for p in files:
+            if p.name in key_names or ('persistence' in p.name.lower() and p.suffix=='.js'):
+              txt=p.read_text(errors='replace')
+              if len(txt)>100000: continue
+              print(f'\n##### FILE {p.relative_to(root)} #####\n{txt}')
+          print('\n=== TEST INVENTORY ===')
+          for p in sorted((root/'tests').glob('*')):
+            n=p.name.lower()
+            if any(k in n for k in ['save','load','persist','indexed','checkpoint','migration','street','city_aftermath','operation']): print(p.name)
+          PY
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CR-PWA12-107-Persistence-Audit
+          path: out/PERSISTENCE_AUDIT.txt
+          retention-days: 7
