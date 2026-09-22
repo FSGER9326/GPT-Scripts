@@ -47,24 +47,15 @@ jobs:
           from pathlib import Path
           import os,re
           root=Path(os.environ['ROOT'])
-          files=[
-            root/'src/world/district-worlds-v13-3.js',
-            root/'src/world/living-streets-v13-4a.js',
-            root/'src/legacy/city-life-v13.js',
-            root/'src/runtime/legacy-save-bridge.js',
-            root/'src/bootstrap/module-manifest.js',
-          ]
+          files=[root/'src/world/district-worlds-v13-3.js',root/'src/world/living-streets-v13-4a.js',root/'src/legacy/city-life-v13.js',root/'src/runtime/legacy-save-bridge.js',root/'src/bootstrap/module-manifest.js']
           keys=['findDistrictPathV133','routeToTransitNodeV133','travelDistrictV133','openTransitNodeV133','Game.pendingPath','ensureLivingStreetsStateV134','ensureNeighborhoodStateV134','drawLivingStreetsV134','handleLivingStreetTapV134','onStreetStepV134','runEncounterDirectorV134','streetMemory','Street Memory','memory']
           for p in files:
-            print('\n===== CANONICAL',p.relative_to(root),'=====')
-            s=p.read_text(encoding='utf-8')
+            print('\n===== CANONICAL',p.relative_to(root),'=====');s=p.read_text(encoding='utf-8')
             for k in keys:
               hits=list(re.finditer(re.escape(k),s,re.I))
               if not hits: continue
               print(f'--- {k}: {len(hits)} hits ---')
-              for m in hits[:4]:
-                a=max(0,m.start()-700);b=min(len(s),m.end()+1500)
-                print(s[a:b].replace('\r',''))
+              for m in hits[:4]: print(s[max(0,m.start()-700):min(len(s),m.end()+1500)].replace('\r',''))
           PY
 
       - name: Reapply cumulative City Candidates 01-07
@@ -83,10 +74,14 @@ jobs:
           python3 scripts/cr_city_access_ecology_patch_seam_fix.py scripts/cr_city_access_ecology_patch.py
           python3 scripts/cr_city_access_ecology_patch.py "$ROOT"
           python3 scripts/cr_city_transit_incidents_patch.py "$ROOT"
+          cp scripts/cr_city_transit_incidents_browser.py "$ROOT/tests/pwa12_104_city_transit_incidents_browser.py"
           python3 scripts/cr_city_transit_incidents_persistence_fix.py "$ROOT"
           python3 scripts/cr_city_control_posts_patch_seam_fix.py scripts/cr_city_control_posts_patch.py
           python3 scripts/cr_city_control_posts_patch.py "$ROOT"
           python3 scripts/cr_city_control_posts_ecology_clearance_fix.py "$ROOT"
+          cp scripts/cr_city_control_posts_contract.py "$ROOT/tests/pwa12_104_city_control_posts_contract.py"
+          cp scripts/cr_city_control_posts_browser.py "$ROOT/tests/pwa12_104_city_control_posts_browser.py"
+          python3 scripts/cr_city_control_posts_browser_lifecycle_fix.py "$ROOT"
           python3 scripts/cr_city_control_posts_route_wakeup_fix.py "$ROOT"
           cd "$ROOT"
           python3 tools/rebundle_runtime.py
@@ -100,22 +95,18 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import os,re
-          root=Path(os.environ['ROOT'])
-          world=root/'src/world'
+          root=Path(os.environ['ROOT']);world=root/'src/world'
           files=[root/'src/world/district-worlds-v13-3.js',root/'src/world/living-streets-v13-4a.js',root/'src/world/district-control-posts-pwa12-104-city-candidate-07.js',root/'src/world/access-ecology-pwa12-104-city-candidate-05.js',root/'src/bootstrap/module-manifest.js']
           files += sorted(p for p in world.glob('*.js') if 'memory' in p.name.lower() or 'street' in p.name.lower())
           seen=set();files=[p for p in files if p.exists() and not (str(p) in seen or seen.add(str(p)))]
-          keys=['findDistrictPathV133','routeToTransitNodeV133','Game.pendingPath','controlPostsForWorldV12104','controlPostForLinkV12104','routeControlPostV12104','drawLivingStreetsV134','handleLivingStreetTapV134','onStreetStepV134','streetMemory','Street Memory','visited','discovered','known']
+          keys=['findDistrictPathV133','routeToTransitNodeV133','Game.pendingPath','controlPostsForWorldV12104','controlPostForLinkV12104','routeControlPostV12104','drawLivingStreetsV134','handleLivingStreetTapV134','onStreetStepV134','streetMemory','Street Memory','visited','discovered','known','openTransitNodeV133','travelDistrictV133']
           print('\nWORLD MODULES:')
           for p in sorted(world.glob('*.js')): print(p.name)
           for p in files:
-            s=p.read_text(encoding='utf-8')
-            print('\n===== CUMULATIVE',p.relative_to(root),'=====')
+            s=p.read_text(encoding='utf-8');print('\n===== CUMULATIVE',p.relative_to(root),'=====')
             for k in keys:
               hits=list(re.finditer(re.escape(k),s,re.I))
               if not hits: continue
               print(f'--- {k}: {len(hits)} hits ---')
-              for m in hits[:6]:
-                a=max(0,m.start()-900);b=min(len(s),m.end()+1900)
-                print(s[a:b].replace('\r',''))
+              for m in hits[:6]: print(s[max(0,m.start()-900):min(len(s),m.end()+1900)].replace('\r',''))
           PY
