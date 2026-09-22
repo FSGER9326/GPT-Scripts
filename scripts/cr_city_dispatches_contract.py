@@ -3,9 +3,15 @@ import sys,re
 root=Path(sys.argv[1] if len(sys.argv)>1 else '.').resolve()
 mod=(root/'src/world/district-dispatches-pwa12-104-city-candidate-01.js').read_text(encoding='utf-8')
 man=(root/'src/bootstrap/module-manifest.js').read_text(encoding='utf-8')
+bundle=(root/'src/runtime/runtime-bundle.js').read_text(encoding='utf-8')
+living_marker='/* SOURCE: src/world/living-streets-v13-4a.js */'
+dispatch_marker='/* SOURCE: src/world/district-dispatches-pwa12-104-city-candidate-01.js */'
+approach_marker='/* SOURCE: src/missions/contract-approaches-v13-4b.js */'
 checks={
  'module registered':"'world.districtDispatches'" in man,
  'module ordered after living streets':"'world.livingStreets','world.districtDispatches','missions.approaches'" in man,
+ 'runtime source marker present':bundle.count(dispatch_marker)==1,
+ 'runtime marker order':all(x in bundle for x in [living_marker,dispatch_marker,approach_marker]) and bundle.index(living_marker)<bundle.index(dispatch_marker)<bundle.index(approach_marker),
  'state nested in living streets':'street.districtDispatches=street.districtDispatches||{}' in mod,
  'physical source gate':'sourceIsPhysicalD' in mod and 'nearLocationD' in mod,
  'official route authority':'routeToLocationV133' in mod,
@@ -27,4 +33,3 @@ checks={
 failed=[k for k,v in checks.items() if not v]
 if failed: raise SystemExit('FAIL district dispatch contract: '+', '.join(failed))
 print(f"PASS district dispatch contract: {len(checks)} checks")
-# automation trigger: rerun exact-canonical city dispatch candidate verification
