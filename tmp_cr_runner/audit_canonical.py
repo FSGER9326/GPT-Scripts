@@ -4,7 +4,12 @@ URL=os.environ['CR_SOURCE_URL']
 EXPECTED_SHA='6002ed124aadd1690f0da9170d999cd0e30ed965cca1e04f654efa89d9fd7059'
 out=Path('cr_audit'); out.mkdir(exist_ok=True)
 zp=out/'canonical.zip'
-urllib.request.urlretrieve(URL,zp)
+req=urllib.request.Request(URL,headers={'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36','Accept':'*/*','Cache-Control':'no-cache'})
+with urllib.request.urlopen(req,timeout=60) as r, zp.open('wb') as f:
+    while True:
+        chunk=r.read(1024*1024)
+        if not chunk: break
+        f.write(chunk)
 data=zp.read_bytes(); sha=hashlib.sha256(data).hexdigest()
 print('CANONICAL_BYTES',len(data)); print('CANONICAL_SHA256',sha)
 if sha!=EXPECTED_SHA: raise SystemExit('canonical sha mismatch')
@@ -33,7 +38,6 @@ with zipfile.ZipFile(zp) as z:
         if found:
             print('\nFILE',rel)
             for ln,snip in found[:20]: print(snip,'\n---')
-    # inspect bundle source markers and builder arrays
     for rel in ['src/runtime/runtime-bundle.js','src/styles/runtime-bundle.css','tools/build_pwa11.py','src/bootstrap/module-manifest.js','src/bootstrap/compatibility-manifest.js','index.html','build-meta.json','precache-manifest.js']:
         n=root+rel
         if n in names:
