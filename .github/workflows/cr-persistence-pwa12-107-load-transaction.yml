@@ -155,10 +155,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          META=$(cat "$ROOT/build-meta.json")
           CONTROL=$(tail -n1 out/progressed-campaign-control.log)
-          cat > "$ROOT/DEVELOPMENT_NOTE_PWA12_107_LOAD_TRANSACTION_CANDIDATE_01.md" <<EOF
-          # Chrome Requiem PWA12.107 Load Transaction Candidate 01
+          export CONTROL
+          python3 - "$ROOT/DEVELOPMENT_NOTE_PWA12_107_LOAD_TRANSACTION_CANDIDATE_01.md" <<'PY'
+          import json, os, sys
+          root = os.environ['ROOT']
+          control = os.environ['CONTROL']
+          with open(os.path.join(root, 'build-meta.json'), encoding='utf-8') as fh:
+              meta = json.load(fh)
+          note = f'''# Chrome Requiem PWA12.107 Load Transaction Candidate 01
 
           ## Baseline
           Reconstructed and build-hash verified against the explicit canonical `14.0.0-pwa.12.104-street-contact-support` / `4313da4acd4c324a7672c36e` before editing. Canonical was not modified.
@@ -181,7 +186,7 @@ jobs:
 
           Chromium: new-game -> save -> reload -> continue; immediate save -> load; real legacy-key migration to schema 14; inherited in-flight save/load; multistage operation checkpoint restart; district aftermath; and native-origin IndexedDB save A/save B/corrupt primary/restore backup/fresh-document repaired load.
 
-          Progressed-campaign control: $CONTROL. Full logs are packaged alongside this note.
+          Progressed-campaign control: {control}. Full logs are packaged alongside this note.
 
           ## Runtime-only state boundary / unresolved risk
           This candidate prevents a failed legacy hydration from becoming *durable*, but it intentionally does not claim exact in-memory rollback after an arbitrary late loader exception. Tactical grids, DOM-backed cell objects, and multistage operation ownership contain runtime-only state that is not fully represented by the durable serializer. If a structurally valid payload throws after mutating live runtime objects, stored progress and the compatibility mirror remain protected, but the current page may still require a clean reload before play continues.
@@ -190,10 +195,17 @@ jobs:
           Add explicit runtime transaction snapshots/rollback hooks for `Game` plus multistage/combat ownership, with UI rebind/re-render recovery, so late hydration exceptions restore the exact pre-load live session rather than protecting only durable state.
 
           ## Build meta
-          \`\`\`json
-          $META
-          \`\`\`
-          EOF
+          ```json
+          {json.dumps(meta, indent=2)}
+          ```
+          '''
+          # Remove YAML/script indentation from the Markdown body while preserving code-block content.
+          lines = note.splitlines()
+          cleaned = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines).strip() + '\n'
+          with open(sys.argv[1], 'w', encoding='utf-8') as fh:
+              fh.write(cleaned)
+          print('WROTE_DEVELOPMENT_NOTE', sys.argv[1])
+          PY
           cp "$ROOT/DEVELOPMENT_NOTE_PWA12_107_LOAD_TRANSACTION_CANDIDATE_01.md" out/
           CANDIDATE='Chrome_Requiem_v14_PWA_pwa12_107_LOAD_TRANSACTION_CANDIDATE_01'
           mv "$ROOT" "$GITHUB_WORKSPACE/work/$CANDIDATE"
