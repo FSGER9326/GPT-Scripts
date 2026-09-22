@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work out
-          curl -fL --retry 3 'https://sdmntpreastus2.oaiusercontent.com/files/00000000-e07c-81f6-9bd5-af4093f87cd6/raw?se=2026-09-22T05%3A26%3A05Z&sp=r&sv=2026-02-06&sr=b&scid=12952be8-cceb-50cb-a376-a5a13e8c4c24&skoid=dd316919-ffbf-4550-9c54-dfc99f412009&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A40%3A52Z&ske=2026-09-22T21%3A40%3A52Z&sks=b&skv=2026-02-06&sig=5e4cjxBB5ySs9gFXr94F9sJuveoO8xhzHDvfsZvv%2BSU%3D' -o canonical.zip
+          curl -fL --retry 3 'https://sdmntpreastus2.oaiusercontent.com/files/00000000-2f60-81f6-a264-49359bb612dd/raw?se=2026-09-22T05%3A29%3A49Z&sp=r&sv=2026-02-06&sr=b&scid=70ea9b8b-e010-570a-82e6-4a914034c065&skoid=c36a4874-d531-4a8d-99fc-7da0d9143d9c&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A25%3A47Z&ske=2026-09-22T23%3A25%3A47Z&sks=b&skv=2026-02-06&sig=y9hMKlcoCs0/XZB8dOES1mFbzRrA9K5WmmuzS%2Bl13pU%3D' -o canonical.zip
           unzip -q canonical.zip -d work
           test "$(python3 -c "import json;print(json.load(open('work/cr103/build-meta.json'))['version'])")" = '14.0.0-pwa.12.104-street-contact-support'
           test "$(python3 -c "import json;print(json.load(open('work/cr103/build-meta.json'))['schemaVersion'])")" = '14'
@@ -36,6 +36,15 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/cr_pwa12_107_patch.py work/cr103
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('work/cr103/src/runtime/legacy-save-bridge.js')
+          s=p.read_text()
+          old='try{payload=capturePayload()}catch(err){\n       console.warn(\'[CR14] save snapshot capture failed:\',err?.message||err);'
+          new='try{payload=JSON.parse(serialize())}catch(err){\n       console.warn(\'[CR14] save snapshot capture failed:\',err?.message||err);'
+          assert old in s
+          p.write_text(s.replace(old,new,1))
+          PY
           cp scripts/cr_pwa12_107_load_transaction_contract.mjs work/cr103/tests/pwa12_107_load_transaction_rollback_contract.mjs
           cp scripts/cr_pwa12_107_migration_browser.py work/cr103/tests/pwa12_107_migration_browser.py
           cd work/cr103
