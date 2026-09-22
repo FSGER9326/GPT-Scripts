@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict';
-import {installLegacySaveBridge} from '../src/runtime/legacy-save-bridge.js';
-import {createSaveEnvelope} from '../src/runtime/save-envelope.js';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import {webcrypto} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+import {dirname,resolve} from 'node:path';
+
+const here=dirname(fileURLToPath(import.meta.url));
+const ctx={console,crypto:webcrypto,structuredClone,TextEncoder,Map,Set,Date,ArrayBuffer,WeakMap,Object,JSON,Number,String,Promise,Error,TypeError,setTimeout,clearTimeout};
+ctx.globalThis=ctx;
+vm.createContext(ctx);
+const source=fs.readFileSync(resolve(here,'../src/runtime/save-envelope.js'),'utf8')+'\n'+fs.readFileSync(resolve(here,'../src/runtime/legacy-save-bridge.js'),'utf8')+'\n;globalThis.__p107={createSaveEnvelope,installLegacySaveBridge};';
+vm.runInContext(source,ctx,{filename:'pwa12_107_runtime_contract.js'});
+const {createSaveEnvelope,installLegacySaveBridge}=ctx.__p107;
+assert.equal(typeof createSaveEnvelope,'function');assert.equal(typeof installLegacySaveBridge,'function');
 
 class HostNode { constructor(id){this.id=id;} }
 class MemoryStorage {
@@ -21,7 +33,6 @@ function makeTarget(storage){
       const payload=JSON.parse(storage.getItem(`chrome_requiem_v13_${Number(slot)}`));
       Game.screen=payload.screen;Game.credits=payload.credits;Game.day=payload.day;Game.nested={...payload.nested};
       Game.units=(payload.units||[]).map(u=>({...u}));Game.turnQueue=[...Game.units];Game.turnIndex=payload.turnIndex||0;Game.activeMission=payload.activeMission||null;
-      // Simulates compatibility reconstruction autosaves that must never escape a failed load.
       this.saveGame(slot,true);
       if(this.failLoad){
         Game.credits=-999;Game.nested.value=-5;Game.units=[];Game.turnQueue=[];Game.screen='intro';
@@ -59,7 +70,6 @@ assert.equal(target.Game.combatCanvas,host,'runtime-only host reference must sur
 assert.equal(storage.getItem('chrome_requiem_v13_0'),liveMirror,'compatibility mirror must be restored exactly');
 assert.equal(persisted.length,0,'failed-load reconstruction autosaves must be discarded');
 
-// A subsequent healthy load must still work and its reconstruction autosave commits only after hydration.
 target.failLoad=false;
 const loaded=await bridge.load(0);assert.equal(loaded,true);
 await bridge.flush();
@@ -67,7 +77,6 @@ assert.equal(target.Game.screen,'world');assert.equal(target.Game.credits,5000);
 assert.equal(persisted.length,1,'successful-load reconstruction autosaves are coalesced and committed');
 assert.equal(persisted[0].envelope.payload.credits,5000);
 
-// Explicit load mutex: second resolver cannot start until first transaction completes.
 let calls=0,release;const gate=new Promise(r=>release=r);let first=true;
 const storage2=new MemoryStorage();const made2=makeTarget(storage2);made2.target.failLoad=false;
 const env2=await createSaveEnvelope(durablePayload,{gameVersion:'14.0.0-pwa.12.104-street-contact-support',slot:0});
