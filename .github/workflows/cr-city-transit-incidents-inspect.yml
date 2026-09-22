@@ -1,0 +1,142 @@
+name: CR City Transit Incidents Candidate 06 Preedit Audit
+
+on:
+  push:
+    branches: [chrome-requiem-city-transit-incidents-06]
+    paths:
+      - '.github/workflows/cr-city-transit-incidents-inspect.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct exact PWA12.104 canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work out
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          test -n "$INNER"
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          test -n "$ROOT"
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
+          python3 -c "import json;m=json.load(open('build-meta.json'));assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m;assert m['buildHash']=='4313da4acd4c324a7672c36e',m;assert m['schemaVersion']==14,m;print('VERIFIED EXACT CANONICAL',m)"
+          echo "ROOT=$PWD" >> "$GITHUB_ENV"
+
+      - name: Audit exact canonical city/travel/encounter/persistence seams before editing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re,json
+          root=Path(os.environ['ROOT'])
+          out=Path(os.environ['GITHUB_WORKSPACE'])/'out'/'CANONICAL_PREEDIT_CITY_AUDIT.md'
+          files={
+            'DISTRICT_WORLD':root/'src/world/district-worlds-v13-3.js',
+            'LIVING_STREETS':root/'src/world/living-streets-v13-4a.js',
+            'MANIFEST':root/'src/bootstrap/module-manifest.js',
+          }
+          for k,p in files.items():
+            if not p.exists(): raise SystemExit(f'MISSING {k}: {p}')
+          def fn(text,name):
+            needle='function '+name+'('
+            i=text.find(needle)
+            if i<0:return f'\n### {name}: NOT FOUND\n'
+            b=text.find('{',i); d=0; quote=None; esc=False
+            for j in range(b,len(text)):
+              c=text[j]
+              if quote:
+                if esc: esc=False
+                elif c=='\\': esc=True
+                elif c==quote: quote=None
+                continue
+              if c in "'\"`": quote=c; continue
+              if c=='{': d+=1
+              elif c=='}':
+                d-=1
+                if d==0:return '\n### '+name+'\n```js\n'+text[i:j+1]+'\n```\n'
+            return f'\n### {name}: UNTERMINATED\n'
+          dw=files['DISTRICT_WORLD'].read_text()
+          ls=files['LIVING_STREETS'].read_text()
+          names_dw=['currentDistrictV133','findDistrictPathV133','routeToLocationV133','routeToTransitNodeV133','travelDistrictV133','updateRouteCardV133','stepDistrictMovementV133']
+          names_ls=['ensureLivingStreetsStateV134','ensureNeighborhoodStateV134','currentNeighborhoodStateV134','streetContactSupportV134','triggerActorEncounterV134','applyEffectsV134','onStreetStepV134','launchStreetCombatV134','settleStreetCombatV134','updateNeighborhoodHUDV134']
+          text='# Candidate 06 pre-edit audit — exact PWA12.104 canonical\n\n'
+          text+='Runtime identity was rebuilt and asserted before this audit. No Candidate 06 edit has occurred.\n'
+          text+='\n## District world / path / transit authority\n'+''.join(fn(dw,n) for n in names_dw)
+          text+='\n## Living Streets / encounter / combat bridge / state\n'+''.join(fn(ls,n) for n in names_ls)
+          for needle in ['window.onStreetStepV134','window.launchStreetCombatV134','V133_TRANSIT_LINKS','Game.pendingPath','v134StreetEncounter','streetCombat']:
+            text+=f'\n## Literal `{needle}`\n'
+            for src,label in [(dw,'district-worlds'),(ls,'living-streets')]:
+              for m in list(re.finditer(re.escape(needle),src))[:8]:
+                a=max(0,m.start()-280);b=min(len(src),m.end()+420)
+                text+=f'\n**{label}**\n```js\n{src[a:b]}\n```\n'
+          out.write_text(text)
+          print(out)
+          PY
+
+      - name: Reapply cumulative City Candidates 01-05 without Candidate 06
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_dispatches_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_ui_preserve.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_lastmile_atomic_patch.py "$ROOT"
+          python3 scripts/cr_city_runtime_bundle_order_patch.py "$ROOT"
+          python3 scripts/cr_city_dynamic_disruptions_patch.py "$ROOT"
+          python3 scripts/cr_city_dynamic_disruptions_time_fix.py "$ROOT"
+          python3 scripts/cr_city_multihop_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_multihop_ui_entry_fix.py "$ROOT"
+          python3 scripts/cr_city_access_ecology_patch_seam_fix.py scripts/cr_city_access_ecology_patch.py
+          python3 scripts/cr_city_access_ecology_patch.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-access-ecology-candidate.05'
+
+      - name: Audit cumulative pre-Candidate-06 seams
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          root=Path(os.environ['ROOT']); out=Path(os.environ['GITHUB_WORKSPACE'])/'out'/'CUMULATIVE_PRE06_CITY_AUDIT.md'
+          paths=[root/'src/world/district-worlds-v13-3.js',root/'src/world/living-streets-v13-4a.js',root/'src/world/interdistrict-logistics-pwa12-104-city-candidate-02.js',root/'src/world/dynamic-logistics-disruptions-pwa12-104-city-candidate-03.js',root/'src/world/multihop-logistics-pwa12-104-city-candidate-04.js',root/'src/world/access-ecology-pwa12-104-city-candidate-05.js',root/'src/bootstrap/module-manifest.js']
+          for p in paths:
+            if not p.exists(): raise SystemExit(f'MISSING {p}')
+          keys=['prepareTransitAccessEcologyV12104','commitTransitAccessEcologyV12104','chooseInterdistrictTransitV12104','onDistrictTransitCompleteV12104','evaluateInterdistrictDisruptionV12104','rerouteInterdistrictDisruptionV12104','pushThroughInterdistrictDisruptionV12104','onStreetStepV134','launchStreetCombatV134','settleStreetCombatV134','travelDistrictV133','routeToTransitNodeV133','Game.pendingPath','accessEcology']
+          chunks=['# Candidate 06 cumulative pre-edit audit\n\nCandidates 01-05 were reapplied after exact-canonical audit; Candidate 06 is still absent.\n']
+          for p in paths:
+            s=p.read_text(); chunks.append(f'\n## {p.relative_to(root)}\n')
+            for key in keys:
+              hits=list(re.finditer(re.escape(key),s))
+              if not hits: continue
+              chunks.append(f'\n### `{key}` ({len(hits)} hits)\n')
+              for m in hits[:5]:
+                a=max(0,m.start()-360);b=min(len(s),m.end()+620);chunks.append('```js\n'+s[a:b]+'\n```\n')
+          out.write_text(''.join(chunks));print(out)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-Candidate-06-Preedit-Audit
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
