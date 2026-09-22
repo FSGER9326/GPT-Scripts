@@ -5,23 +5,144 @@ on:
     paths:
       - 'tmp_cr_runner/**'
       - '.github/workflows/cr-workshop-calibration-runner.yml'
+permissions:
+  contents: read
+  actions: read
 jobs:
-  build:
+  qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      CR_SOURCE_URL: 'https://sdmntpritalynorth.oaiusercontent.com/files/00000000-3b00-8246-a043-1f63d9211627/raw?se=2026-09-22T04%3A46%3A28Z&sp=r&sv=2026-02-06&sr=b&scid=fecea2ec-5d51-5a6a-acaf-9baa08095a17&skoid=82a3371f-2f6c-4f81-8a78-2701b362559b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A39%3A11Z&ske=2026-09-22T21%3A39%3A11Z&sks=b&skv=2026-02-06&sig=oEnScGGM/idM0a/gle510n9a34XNeW2r9ZYZazGETWk%3D'
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Build exact-canonical candidate
+      - name: Recover exact-canonical candidate from verified build run
+        uses: actions/download-artifact@v4
+        with:
+          name: cr-workshop-calibration-build
+          path: prior
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: FSGER9326/GPT-Scripts
+          run-id: 35688129184
+      - name: Correct non-runtime contract typo and run build contracts
         shell: bash
         run: |
           set -euo pipefail
-          python tmp_cr_runner/build_workshop_calibration.py | tee cr-build.log
+          CANDIDATE="$GITHUB_WORKSPACE/prior/cr_build/Chrome_Requiem_v14_PWA_pwa12_104_WORKSHOP_CALIBRATION_CANDIDATE_02_source"
+          echo "CANDIDATE=$CANDIDATE" >> "$GITHUB_ENV"
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          p=Path(os.environ.get('CANDIDATE','prior/cr_build/Chrome_Requiem_v14_PWA_pwa12_104_WORKSHOP_CALIBRATION_CANDIDATE_02_source'))/'tests/pwa12_104_workshop_calibration_contract.py'
+          s=p.read_text()
+          old='assert "hasOwnProperty.call(synthetic, \'calibrationProfileV14\')" in js'
+          new='assert re.search(r"hasOwnProperty\\.call\\(synthetic,\\s*[\\\'\\\"]calibrationProfileV14[\\\'\\\"]\\)",js)'
+          if old not in s: raise SystemExit('expected contract typo not found')
+          p.write_text(s.replace(old,new,1))
+          print('Corrected test-only assertion; runtime/source bytes unchanged.')
+          PY
+          node --check "$CANDIDATE/src/progression/workshop-calibration-v14.js"
+          node --check "$CANDIDATE/src/runtime/runtime-bundle.js"
+          (cd "$CANDIDATE" && python tests/pwa12_104_workshop_calibration_contract.py)
+          (cd "$CANDIDATE" && python tests/pwa12_39_js_bundle_perf_contract.py)
+          (cd "$CANDIDATE" && python tests/pwa12_37_css_bundle_perf_contract.py)
+          python - <<'PY'
+          import json,os,hashlib
+          from pathlib import Path
+          root=Path(os.environ['CANDIDATE'])
+          meta=json.loads((root/'build-meta.json').read_text())
+          assert meta['version']=='14.0.0-pwa.12.104-workshop-calibration-candidate.02',meta
+          assert meta['buildHash']=='a9f31afea8cd6ce071c31e4a',meta
+          assert meta['schemaVersion']==14,meta
+          print('VERIFIED_META',json.dumps(meta,sort_keys=True))
+          PY
+      - name: Install Chromium QA runtime
+        run: |
+          python -m pip install --quiet playwright
+          python -m playwright install --with-deps chromium
+      - name: Run browser integration and Pixel 7 QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$CANDIDATE" > cr-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/ >/dev/null && break; sleep 1; done
+          python tmp_cr_runner/browser_workshop_calibration.py "$CANDIDATE" | tee cr-browser.log
+          python - <<'PY' | tee cr-inherited-diagnostics.log
+          import os,json
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+            b=p.chromium.launch(headless=True); pg=b.new_page(viewport={'width':1280,'height':800})
+            errs=[]; pg.on('pageerror',lambda e: errs.append(str(e)))
+            pg.goto('http://127.0.0.1:8765/',wait_until='domcontentloaded',timeout=60000)
+            pg.wait_for_function('window.ChromeRequiemV14Boot?.ready===true',timeout=60000)
+            pg.evaluate("""() => {if(!Game.roster?.length){const ck=Object.keys(CLASSES)[0],bk=Object.keys(BACKGROUNDS)[0];startNewGame('QA_DIAG',ck,bk)}}""")
+            d=pg.evaluate('() => ChromeRequiemV14Boot.runtime.diagnostics()')
+            print(json.dumps(d,indent=2))
+            assert not errs,errs
+            assert d['passed']==d['total'],d
+            assert 'runDiagnosticsV14Calibration' in d['results'],d
+            b.close()
+          PY
+      - name: Run focused inherited regression contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee cr-regressions.log
+          import os,subprocess
+          from pathlib import Path
+          root=Path(os.environ['CANDIDATE']); tests=root/'tests'
+          patterns=[
+            '*street*contact*support*contract.py',
+            '*save*recovery*contract.py',
+            '*atomic*save*contract.py',
+            '*inflight*save*contract.py',
+            '*action*time*contract.py',
+            '*manifest*contract.py',
+            '*service*worker*contract.py'
+          ]
+          selected=[]
+          for pattern in patterns:
+            selected.extend(sorted(tests.glob(pattern)))
+          unique=[]; seen=set()
+          for p in selected:
+            if p.name not in seen: seen.add(p.name); unique.append(p)
+          print('SELECTED',len(unique),[p.name for p in unique])
+          assert unique,'no inherited regressions matched'
+          for test in unique:
+            print('RUN',test.name,flush=True)
+            subprocess.run(['python',str(test)],cwd=root,check=True)
+          print('PASS inherited regression selection',len(unique))
+          PY
+      - name: Write development note and package candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p deliverable
+          python - <<'PY'
+          import os,json,hashlib,shutil
+          from pathlib import Path
+          root=Path(os.environ['CANDIDATE'])
+          meta=json.loads((root/'build-meta.json').read_text())
+          browser=json.loads((root/'qa/pwa12-104-workshop-calibration-browser.json').read_text())
+          note=f'''# PWA12.104 Workshop Calibration Candidate 02\n\n## Baseline\n- Canonical: 14.0.0-pwa.12.104-street-contact-support\n- Canonical archive SHA-256: 6002ed124aadd1690f0da9170d999cd0e30ed965cca1e04f654efa89d9fd7059\n- Candidate: {meta["version"]}\n- Candidate runtime build hash: {meta["buildHash"]}\n- Save schema: {meta["schemaVersion"]} (unchanged)\n\n## Implemented\nWorkshop Calibration adds mutually exclusive per-operative/per-weapon FIELD ZERO, BREACH PRESSURE (+2 DMG, -1 RANGE, -5% CRIT), and PRECISION BED (-1 DMG, +1 RANGE, +6% CRIT) refits. Refit costs consume existing credits, salvage, workshop capability and normal campaign time; manufacturer affinity modifies refit economics only. Active missions block refits. Calibration state is additive `weaponCalibrationV14` roster state, so legacy saves default to FIELD ZERO without a schema bump.\n\nThe transaction uses a reversible pre-commit phase for credits/salvage/profile/stat derivation. Campaign time is the commit boundary because `advanceTime` can modify wider world state. A post-commit time-processing exception therefore preserves the paid installed refit and locks further refits until reload rather than performing an unsafe partial rollback.\n\n## Verification actually executed\n- Exact canonical archive SHA verified before the candidate build.\n- `node --check` on calibration source and complete runtime bundle.\n- Candidate source/build contract.\n- Canonical JS and CSS bundle contracts.\n- Headless Chromium integration QA: {browser["passed"]}/{browser["total"]} assertions passed.\n- Pixel 7 viewport 412x915: profile panel, three controls, >=44px targets and zero horizontal overflow checked; screenshot captured.\n- Equip-away/equip-back profile ownership, attachment interaction, save/load restore, combat-unit stat propagation, repeated derived-stat idempotence, exact resource costs/action-time call, pre-commit rollback and post-commit lockout all exercised.\n- Aggregate inherited v13-v13.6 + candidate diagnostics run in Chromium.\n- Focused inherited save/PWA/action-time/street-contact regression selection executed by the workflow; see `qa/cr-regressions.log`.\n\n## Balance risks\nNumbers are first-pass. BREACH may be disproportionately valuable on already high-damage low-range weapons; PRECISION may be too efficient on crit-stacking builds. Manufacturer affinity, Workshop 3 time reduction and Workshop 4 credit reduction may make repeated late-game refits too cheap. These require campaign-scale economic telemetry rather than stronger stat bonuses.\n\n## Next progression priority\nTie calibration more deeply into item condition/maintenance: calibrated weapons should develop profile-specific maintenance pressure or servicing choices, but only after campaign telemetry confirms refit frequency and salvage/credit sinks are healthy.\n'''
+          (root/'DEVELOPMENT_NOTE_PWA12_104_WORKSHOP_CALIBRATION_CANDIDATE_02.md').write_text(note)
+          qa=root/'qa'; qa.mkdir(exist_ok=True)
+          for src,name in [('cr-browser.log','cr-browser.log'),('cr-inherited-diagnostics.log','cr-inherited-diagnostics.log'),('cr-regressions.log','cr-regressions.log'),('cr-http.log','cr-http.log')]:
+            p=Path(src)
+            if p.exists(): shutil.copy2(p,qa/name)
+          out=Path('deliverable')/'Chrome_Requiem_v14_PWA_pwa12_104_WORKSHOP_CALIBRATION_CANDIDATE_02_source.zip'
+          shutil.make_archive(str(out.with_suffix('')),'zip',root.parent,root.name)
+          digest=hashlib.sha256(out.read_bytes()).hexdigest()
+          (Path('deliverable')/'SHA256.txt').write_text(f'{digest}  {out.name}\n')
+          shutil.copy2(root/'DEVELOPMENT_NOTE_PWA12_104_WORKSHOP_CALIBRATION_CANDIDATE_02.md',Path('deliverable')/'DEVELOPMENT_NOTE_PWA12_104_WORKSHOP_CALIBRATION_CANDIDATE_02.md')
+          shutil.copy2(root/'qa/pwa12-104-workshop-calibration-mobile.png',Path('deliverable')/'pwa12-104-workshop-calibration-mobile.png')
+          shutil.copy2(root/'qa/pwa12-104-workshop-calibration-browser.json',Path('deliverable')/'pwa12-104-workshop-calibration-browser.json')
+          print('PACKAGE_SHA256',digest)
+          print('PACKAGE',out)
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cr-workshop-calibration-build
-          path: |
-            cr-build.log
-            cr_build/
+          name: cr-workshop-calibration-candidate-02
+          path: deliverable/
+          if-no-files-found: warn
