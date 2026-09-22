@@ -26,10 +26,15 @@ with sync_playwright() as pw:
       return{src:src.id,offerId:offer.id,accepted,chosen:ok,linkId:pick.o.linkId,linkType:pick.o.linkType,path:Game.pendingPath?.length||0,deadline:a.deadline,targetDistrict:a.targetDistrict,targetId:a.targetId,viable:a.options.filter(o=>!o.blocked).length};
     }''')
     assert setup['accepted'] and setup['chosen'] and setup['path']>=4 and setup['viable']>=2,setup
-    first=page.evaluate('''()=>{const w=currentDistrictV133();function step(){const n=Game.pendingPath?.[1];if(!n)return false;Game.ovPlayer={x:n.x,y:n.y};Game.districtWorldsV133.positions[w.id]={x:n.x,y:n.y};Game.pendingPath.shift();advanceTime(.25);onStreetStepV134(w);return true}const ok=step(),a=activeInterdistrictDispatchV12104();return{ok,path:Game.pendingPath?.length||0,armed:a?.dynamicDisruptionArm||null,alert:a?.dynamicDisruption||null}}''')
-    assert first['ok'] and first['armed'] and first['alert'] is None,first
-    alert=page.evaluate('''()=>{const w=currentDistrictV133();const n=Game.pendingPath?.[1];if(!n)return{ok:false};Game.ovPlayer={x:n.x,y:n.y};Game.districtWorldsV133.positions[w.id]={x:n.x,y:n.y};Game.pendingPath.shift();advanceTime(.25);onStreetStepV134(w);updateInterdistrictDisruptionUIV12104();const a=activeInterdistrictDispatchV12104(),d=a?.dynamicDisruption,p=document.getElementById('v12104-disruption-panel'),r=p.getBoundingClientRect();return{ok:true,status:d?.status,title:d?.title,pressure:d?.pressure,link:d?.linkId,alt:d?.alternativeLinkId,path:Game.pendingPath?.length||0,deadline:a?.deadline,text:p?.textContent||'',width:r.width,right:r.right,left:r.left,scroll:document.documentElement.scrollWidth,inner:innerWidth}}''')
+    alert=page.evaluate('''()=>{
+      const w=currentDistrictV133();let steps=0;
+      function physicalStep(){const n=Game.pendingPath?.[1];if(!n)return false;Game.ovPlayer={x:n.x,y:n.y};Game.districtWorldsV133.positions[w.id]={x:n.x,y:n.y};Game.pendingPath.shift();advanceTime(.25);onStreetStepV134(w);return true}
+      let a=activeInterdistrictDispatchV12104();while(a?.dynamicDisruption?.status!=='alert'&&steps<4){if(!physicalStep())break;steps++;a=activeInterdistrictDispatchV12104()}
+      updateInterdistrictDisruptionUIV12104();a=activeInterdistrictDispatchV12104();const d=a?.dynamicDisruption,p=document.getElementById('v12104-disruption-panel'),r=p?.getBoundingClientRect();
+      return{ok:!!d,status:d?.status,title:d?.title,pressure:d?.pressure,link:d?.linkId,alt:d?.alternativeLinkId,path:Game.pendingPath?.length||0,remaining:d?.remainingPath,armed:a?.dynamicDisruptionArm||null,deadline:a?.deadline,text:p?.textContent||'',steps,width:r?.width||0,right:r?.right||0,left:r?.left||0,scroll:document.documentElement.scrollWidth,inner:innerWidth};
+    }''')
     assert alert['ok'] and alert['status']=='alert' and alert['pressure']>=.92 and alert['path']==0,alert
+    assert alert['armed'] and alert['remaining']<setup['path'],(setup,alert)
     assert alert['alt'] and 'LIVE ROUTE DISRUPTION' in alert['text'] and 'REROUTE' in alert['text'] and 'PUSH THROUGH' in alert['text'],alert
     assert alert['width']<=374 and alert['left']>=-0.5 and alert['right']<=390.5 and alert['scroll']<=390,alert
     page.screenshot(path=str(ROOT/'qa/pwa12-104-city-dynamic-disruption-mobile.png'),full_page=True)
