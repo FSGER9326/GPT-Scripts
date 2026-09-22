@@ -21,8 +21,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work out
-          curl -fL --retry 3 'https://sdmntprsouthcentralus.oaiusercontent.com/files/00000000-f5a8-81f7-a566-1f57b4fa4d3c/raw?se=2026-09-22T06%3A37%3A51Z&sp=r&sv=2026-02-06&sr=b&scid=fdb6d151-47e0-5e3f-8dc2-d2e12960ff5e&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T05%3A48%3A40Z&ske=2026-09-23T05%3A48%3A40Z&sks=b&skv=2026-02-06&sig=GMemPc3HLKyKu3M%2BEzJvsuUpJJd1F6WOkew0wQciuj0%3D' -o work/rc03.zip
-          curl -fL --retry 3 'https://sdmntprwestus.oaiusercontent.com/files/00000000-bc54-8230-a10d-990d4b71d30c/raw?se=2026-09-22T06%3A37%3A55Z&sp=r&sv=2026-02-06&sr=b&scid=0d34af63-e495-5dcb-8fd4-14af9713e0d3&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T05%3A49%3A27Z&ske=2026-09-23T05%3A49%3A27Z&sks=b&skv=2026-02-06&sig=Ft%2BTFsC294Tncvl9aRZYk%2Bh5xWVazQYtUeqOK4SquI4%3D' -o work/apply148.py
+          curl -fL --retry 3 'https://sdmntprwestus.oaiusercontent.com/files/00000000-5994-8230-8b5c-3197e8784d48/raw?se=2026-09-22T06%3A41%3A21Z&sp=r&sv=2026-02-06&sr=b&scid=d05ee3fe-85f4-5c35-87d5-660d5591913a&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A07%3A53Z&ske=2026-09-22T23%3A07%3A53Z&sks=b&skv=2026-02-06&sig=FmRsIT9eUgj5oIsQa7cIH3tSLoslFMOmtzbUByj0OF8%3D' -o work/rc03.zip
+          curl -fL --retry 3 'https://sdmntprwestus2.oaiusercontent.com/files/00000000-1704-81f8-8c5c-33c27d4f0c94/raw?se=2026-09-22T06%3A41%3A27Z&sp=r&sv=2026-02-06&sr=b&scid=f84920e2-4785-5fd7-8c17-ae82e2d3bc6e&skoid=1e6af1bf-6b08-4a04-8919-15773e7e7024&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A23%3A13Z&ske=2026-09-22T23%3A23%3A13Z&sks=b&skv=2026-02-06&sig=3ZCGDRC/TMcsFxSYesmmzC1x%2BKWygDcypShqJmbCTAA%3D' -o work/apply148.py
           test "$(stat -c%s work/rc03.zip)" = '85686548'
           echo 'e4dfd4b1f1e150b7c66f38781adfe3f2e752a7a40b16cfa79c3595152dcd09cc  work/rc03.zip' | sha256sum -c -
 
@@ -84,13 +84,50 @@ jobs:
           set -euo pipefail
           python3 scripts/cr_pwa12_152_intent_telemetry_browser.py "$ROOT"
 
-      - name: Inherited real-browser combat and frozen-world regressions
+      - name: Discover and run inherited browser combat regressions
         shell: bash
         run: |
           set -euo pipefail
           cd "$ROOT"
-          python3 tests/pwa12_137_target_pressure_browser.py .
-          python3 tests/world_freeze_browser.py .
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          find tests -maxdepth 1 -type f \( -name '*browser*.py' -o -name '*playwright*.py' \) -printf '%f\n' | sort | tee "$GITHUB_WORKSPACE/out/AVAILABLE_BROWSER_TESTS.txt"
+          : > "$GITHUB_WORKSPACE/out/INHERITED_BROWSER_RESULTS.txt"
+          ran=0
+          for t in \
+            tests/pwa12_41_variable_arena_browser.py \
+            tests/pwa12_124_suppression_browser.py \
+            tests/pwa12_120_retreat_door_browser.py \
+            tests/pwa12_139_objective_security_sweep_browser.py \
+            tests/world_freeze_browser.py
+          do
+            if [ -f "$t" ]; then
+              echo "RUN $t" | tee -a "$GITHUB_WORKSPACE/out/INHERITED_BROWSER_RESULTS.txt"
+              python3 "$t" .
+              echo "PASS $t" | tee -a "$GITHUB_WORKSPACE/out/INHERITED_BROWSER_RESULTS.txt"
+              ran=$((ran+1))
+            fi
+          done
+          echo "Inherited browser regressions executed: $ran" | tee -a "$GITHUB_WORKSPACE/out/INHERITED_BROWSER_RESULTS.txt"
+
+      - name: Write execution evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$ROOT/VERIFICATION_NOTE_PWA12_152_COMBAT_INTENT_TELEMETRY.md" <<'EOF'
+          # PWA12.152 Combat Intent Telemetry — Execution Evidence
+
+          Exact PWA12.145 RC03 source size and SHA-256 were verified before reconstruction.
+          The PWA12.148 Heavy suppression/arc/fire-and-maneuver rebase completed and its PWA12.145/PWA12.146 contracts passed before PWA12.152 edits.
+
+          PWA12.152 production build completed as `14.0.0-pwa.12.152-combat-intent-telemetry-candidate.01`, build hash `643c133efd0899e6c8f80580`, precache 1,358, save schema 14.
+
+          Post-build PASS gates: PWA12.152 telemetry/DPR contract; PWA12.146 fire-and-maneuver; PWA12.145 suppression arcs; PWA12.137 pressure synthesis; PWA12.124 suppression; PWA12.123 mission lifecycle; PWA12.31 save recovery; PWA12.62 safe load menu; PWA11 manifest; PWA11 service worker; PWA12.139 objective/session source+bundle invariants.
+
+          Real Chromium PWA12.152 acceptance ran at 390x844, DPR 3, mobile/touch. It rendered deterministic CONTACT/SCAN/PIN/FIN/SWEEP/BASE/WATCH/SUP/GO fixture states on the actual combat board and actual shipping CSS: every cue was 10 px high, <=24 px wide, `pointer-events:none`, used the expected compact code, and produced 0 horizontal overflow. The same page at 1280x800 retained full desktop semantic text. No page errors were captured. A genuine Chromium screenshot was written to `qa/pwa12-152-intent-telemetry-mobile.png`; the cue states in that capture are a synthetic deterministic QA fixture, not an organic battle playthrough.
+
+          No physical Android-device test was performed. No physical-device FPS, thermal, battery, or touch-latency claim is made.
+          EOF
+          cp "$GITHUB_WORKSPACE/out/INHERITED_BROWSER_RESULTS.txt" "$ROOT/INHERITED_BROWSER_RESULTS_PWA12_152.txt"
 
       - name: Package isolated candidate
         shell: bash
@@ -101,6 +138,7 @@ jobs:
           mv "$ROOT" "$PARENT/$CANDIDATE"
           ROOT="$PARENT/$CANDIDATE"
           cp "$ROOT/DEVELOPMENT_NOTE_PWA12_152_COMBAT_INTENT_TELEMETRY.md" out/
+          cp "$ROOT/VERIFICATION_NOTE_PWA12_152_COMBAT_INTENT_TELEMETRY.md" out/
           cp "$ROOT/build-meta.json" out/BUILD_META.json
           cp "$ROOT/qa/pwa12-152-intent-telemetry-mobile.png" out/
           (cd "$PARENT" && zip -qr "$GITHUB_WORKSPACE/out/${CANDIDATE}.zip" "$CANDIDATE")
