@@ -1,0 +1,161 @@
+name: CR City Interdistrict Logistics
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cr-city-interdistrict-logistics.yml'
+      - 'scripts/cr_city_interdistrict_logistics_patch.py'
+      - 'scripts/cr_city_interdistrict_logistics_ui_preserve.py'
+      - 'scripts/cr_city_interdistrict_logistics_contract.py'
+      - 'scripts/cr_city_interdistrict_logistics_browser.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 38
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact PWA12.104 canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work out
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          test -n "$INNER"
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          test -n "$ROOT"
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build-meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m
+          assert m['buildHash']=='4313da4acd4c324a7672c36e',m
+          assert m['schemaVersion']==14,m
+          print('VERIFIED EXACT CANONICAL',m)
+          PY
+          echo "ROOT=$PWD" >> "$GITHUB_ENV"
+      - name: Apply cumulative city candidates and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_dispatches_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_ui_preserve.py "$ROOT"
+          cp scripts/cr_city_dispatches_contract.py "$ROOT/tests/pwa12_104_city_dispatches_contract.py"
+          cp scripts/cr_city_interdistrict_logistics_contract.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_contract.py"
+          cp scripts/cr_city_interdistrict_logistics_browser.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_browser.py"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-interdistrict-logistics-candidate.02'
+          node --check src/world/district-dispatches-pwa12-104-city-candidate-01.js
+          node --check src/world/interdistrict-logistics-pwa12-104-city-candidate-02.js
+          node --check src/world/district-worlds-v13-3.js
+          node --check src/runtime/runtime-bundle.js
+      - name: Focused and inherited regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ROOT"
+          python3 tests/pwa12_104_city_dispatches_contract.py .
+          python3 tests/pwa12_104_city_interdistrict_logistics_contract.py .
+          python3 tests/pwa12_104_street_contact_support_contract.py
+          python3 tests/pwa12_103_district_control_context_contract.py
+          python3 tests/pwa12_100_district_control_effect_contract.py
+          python3 tests/pwa12_38_save_snapshot_atomicity_contract.py
+          python3 tests/pwa12_31_save_recovery_contract.py
+          python3 tests/pwa12_27_active_city_perf_contract.py
+          python3 tests/pwa12_19_route_marker_perf_contract.py
+          python3 tests/pwa11_manifest_contract.py
+          node tests/pwa11_service_worker.test.mjs
+      - name: Prepare Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          P=$(python3 -c "from playwright.sync_api import sync_playwright;p=sync_playwright().start();print(p.chromium.executable_path);p.stop()")
+          sudo ln -sf "$P" /usr/bin/chromium
+      - name: Browser integration and city-combat routing regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ROOT"
+          python3 tests/pwa12_104_city_interdistrict_logistics_browser.py .
+          python3 tests/pwa12_49_operation_routing_browser.py
+          python3 tests/pwa12_45_stage_consequences_browser.py
+      - name: Document and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ROOT"
+          python3 - <<'PY'
+          import json,pathlib
+          m=json.load(open('build-meta.json'))
+          note=f'''# Chrome Requiem PWA12.104 City Interdistrict Logistics Candidate 02
+
+## Provenance
+- Reconstructed exact canonical `14.0.0-pwa.12.104-street-contact-support` and reproduced canonical build hash `4313da4acd4c324a7672c36e` before editing.
+- Reapplied verified District Dispatches Candidate 01 as the cumulative local-job foundation, then added Candidate 02's interdistrict layer.
+- Candidate version: `{m['version']}`.
+- Candidate build hash: `{m['buildHash']}`.
+- Save schema remains `{m['schemaVersion']}`.
+- Canonical and prior candidates were not overwritten.
+
+## Implemented
+**Interdistrict Logistics** extends physical street dispatches across district boundaries without introducing menu teleportation. At a physically reached contact/shop/clinic, the existing local dispatch board remains available and gains an explicit INTERDISTRICT RUN entry. A city run chooses a real destination location in an adjacent district and quotes the direct physical transit options between the two districts. Border, metro, freight, security and discovered hidden links have distinct risk/cost profiles. Security gates react to reputation/notoriety; watchlisted metro routes are flagged unavailable; undiscovered hidden routes do not appear.
+
+Accepting a city run does not move the player. The player chooses a transit leg, which commits the existing `routeToTransitNodeV133()` / `Game.pendingPath` street route to that real transit node. The normal canonical transit modal and `travelDistrictV133()` remain authoritative for fare, access, time, bribe/hack rules, notoriety and district activation. Candidate 02 adds one optional successful-transit hook; after the chosen crossing succeeds, the destination coordinate is revealed and a physical last-mile route is committed through `routeToLocationV133()`. Completion occurs only at the destination's actual world coordinate through the existing Living Streets step flow.
+
+Route quotes combine real A* street paths on both sides of the crossing with neighborhood Local Heat, Security, Gang Pressure and Unrest plus transit-specific risk. Payout/deadline therefore differ by route. Delivery affects credits, destination heat/prosperity/unrest and source-contact trust; contraband through a security gate creates additional destination heat. State remains nested inside `Game.livingStreetsV134.districtDispatches`, so no schema bump is required.
+
+## Verification executed
+- Exact canonical deterministic reconstruction before patching.
+- JS syntax checks for both city candidate modules, the patched district core and rebuilt runtime bundle.
+- Existing District Dispatches focused contract.
+- Candidate 02 focused interdistrict contract (module order, physical transit graph, two-sided path metrics, risk/access rules, no direct district activation, optional transit hook, physical delivery, persistence owner, mobile geometry and frozen-world constraints).
+- PWA12.104 street-contact support; PWA12.103/PWA12.100 district-control regressions.
+- Save snapshot atomicity and corrupted-save recovery regressions.
+- Active-city and route-marker performance contracts.
+- Manifest and service-worker tests.
+- Chromium end-to-end QA at 390×844: local board preservation, explicit city-board toggle, multiple transit choices, remote acceptance rejection, physical pendingPath to transit, save/load while en route, canonical transit crossing/time or fare consequence, destination reveal, physical last-mile pendingPath, physical delivery/reward, and no horizontal overflow.
+- Existing operation-routing and stage-consequence Chromium regressions to protect city→mission→combat/extraction flows.
+
+## Known limits
+- Candidate 02 intentionally supports one direct interdistrict transit leg per run. Multi-hop deliveries are not yet generated; that avoids silently auto-chaining district transitions.
+- Quote risk is locked when a route option is selected. Neighborhood conditions can still change while travelling, but an accepted payout is not repriced mid-run.
+- Existing canonical transit access rules remain authoritative. Candidate 02 describes their pressure in the quote but does not replace checkpoint UI or invent new bypass mechanics.
+- One active dispatch remains the authority to keep route ownership and mobile HUD state unambiguous.
+
+## Next city target
+Add **live route disruption and multi-hop logistics**: allow two-stage interdistrict chains where district incidents can invalidate or degrade a planned leg and force a physical reroute through another metro/freight/border/hidden node, while preserving player-selected transit and checkpoint consequences.
+'''
+          pathlib.Path('DEVELOPMENT_NOTE_PWA12_104_CITY_INTERDISTRICT_LOGISTICS_CANDIDATE_02.md').write_text(note,encoding='utf-8')
+          print(note)
+          PY
+          cp DEVELOPMENT_NOTE_PWA12_104_CITY_INTERDISTRICT_LOGISTICS_CANDIDATE_02.md "$GITHUB_WORKSPACE/out/"
+          cp qa/pwa12-104-city-interdistrict-logistics-mobile.png "$GITHUB_WORKSPACE/out/"
+          cp build-meta.json "$GITHUB_WORKSPACE/out/BUILD_META.json"
+          C='Chrome_Requiem_v14_PWA_pwa12_104_CITY_INTERDISTRICT_LOGISTICS_CANDIDATE_02'
+          cd ..
+          mv "$(basename "$ROOT")" "$C"
+          zip -qr "$GITHUB_WORKSPACE/out/${C}_source.zip" "$C"
+          sha256sum "$GITHUB_WORKSPACE/out/${C}_source.zip" | tee "$GITHUB_WORKSPACE/out/SHA256.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-PWA12-104-City-Interdistrict-Logistics-Candidate-02
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
