@@ -111,51 +111,51 @@ jobs:
         run: |
           set -euo pipefail
           cd "$ROOT"
-          python3 - <<'PY'
-          import json,pathlib
-          m=json.load(open('build-meta.json'))
-          note=f'''# Chrome Requiem PWA12.104 Interdistrict Logistics Candidate 02
+          VERSION=$(python3 -c "import json;print(json.load(open('build-meta.json'))['version'])")
+          HASH=$(python3 -c "import json;print(json.load(open('build-meta.json'))['buildHash'])")
+          SCHEMA=$(python3 -c "import json;print(json.load(open('build-meta.json'))['schemaVersion'])")
+          cat > DEVELOPMENT_NOTE_PWA12_104_INTERDISTRICT_LOGISTICS_CANDIDATE_02.md <<EOF
+          # Chrome Requiem PWA12.104 Interdistrict Logistics Candidate 02
 
-## Provenance
-- Reconstructed the exact canonical `14.0.0-pwa.12.104-street-contact-support` before editing.
-- Canonical deterministic build hash reproduced: `4313da4acd4c324a7672c36e`.
-- Candidate version: `{m['version']}`.
-- Candidate build hash: `{m['buildHash']}`.
-- Save schema remains `{m['schemaVersion']}`.
-- Canonical was never overwritten; Candidate 02 is independently packaged.
+          ## Provenance
+          - Reconstructed the exact canonical `14.0.0-pwa.12.104-street-contact-support` before editing.
+          - Canonical deterministic build hash reproduced: `4313da4acd4c324a7672c36e`.
+          - Candidate version: `$VERSION`.
+          - Candidate build hash: `$HASH`.
+          - Save schema remains `$SCHEMA`.
+          - Canonical was never overwritten; Candidate 02 is independently packaged.
 
-## Player-facing improvement
-Candidate 02 makes street logistics cross the actual city instead of ending at a district boundary. A known physical contact/shop/clinic can offer an interdistrict courier, medical, data, or contraband chain. The player chooses among FASTEST, CHEAPEST, and LOW PROFILE network plans generated from the real `V133_TRANSIT_LINKS` graph. Plans react to discovered hidden routes, transit costs, security gates, reputation and notoriety. Acceptance still requires standing at the physical source.
+          ## Player-facing improvement
+          Candidate 02 makes street logistics cross the actual city instead of ending at a district boundary. A known physical contact/shop/clinic can offer an interdistrict courier, medical, data, or contraband chain. The player chooses among FASTEST, CHEAPEST, and LOW PROFILE network plans generated from the real `V133_TRANSIT_LINKS` graph. Plans react to discovered hidden routes, transit costs, security gates, reputation and notoriety. Acceptance still requires standing at the physical source.
 
-A selected plan routes the crew through the existing street A* to the first real transit node. Transfers themselves remain under canonical `travelDistrictV133` authority: the system never teleports the player or auto-consumes a transit link. A minimal post-success transit hook advances the logistics state only after canonical access/cost/time/district activation succeeds. Intermediate districts create new physical street legs to the next transfer; the final district creates a real `Game.pendingPath` to the drop location. Wrong-network deviations are detected and the remaining route is replanned from the district the player actually reached.
+          A selected plan routes the crew through the existing street A* to the first real transit node. Transfers themselves remain under canonical `travelDistrictV133` authority: the system never teleports the player or auto-consumes a transit link. A minimal post-success transit hook advances logistics only after canonical access/cost/time/district activation succeeds. Intermediate districts create physical street legs to the next transfer; the final district creates a real `Game.pendingPath` to the drop. Wrong-network deviations are detected and the remaining route is replanned from the district the player actually reached.
 
-Completion is physical at the destination coordinate. Deadline/late payout, source-contact trust, destination heat/prosperity/unrest, transfer history and reroutes persist inside `Game.livingStreetsV134.interdistrictLogistics` with no schema bump. The unified street-logistics panel also preserves the Candidate 01 local-dispatch alternative instead of replacing it.
+          Completion is physical at the destination coordinate. Deadline/late payout, source-contact trust, destination heat/prosperity/unrest, transfer history and reroutes persist inside `Game.livingStreetsV134.interdistrictLogistics` with no schema bump. The unified street-logistics panel also preserves the Candidate 01 local-dispatch alternative instead of replacing it.
 
-## Verification executed
-- Exact canonical reconstruction and deterministic hash equality before any patch.
-- Production rebundle/build and JS syntax checks for core, both city modules and runtime bundle.
-- Candidate 01 local-dispatch contract plus Candidate 02 interdistrict contract.
-- PWA12.104 street-contact-support; PWA12.103/PWA12.100 district-control; save atomicity/recovery; active-city/route-marker performance; manifest/service-worker regressions.
-- Chromium at 390×844: physical-source gating, multi-route network planning, security/notoriety response, hidden-route discovery gating, real local `Game.pendingPath`, save/load mid-chain, every chosen district transfer through canonical `travelDistrictV133`, destination `Game.pendingPath`, physical delivery, rewards and mobile overflow checks.
-- Candidate 01 local-dispatch Chromium regression plus existing operation-routing and mission-stage browser regressions.
+          ## Verification executed
+          - Exact canonical reconstruction and deterministic hash equality before any patch.
+          - Production rebundle/build and JS syntax checks for core, both city modules and runtime bundle.
+          - Candidate 01 local-dispatch contract plus Candidate 02 interdistrict contract.
+          - PWA12.104 street-contact-support; PWA12.103/PWA12.100 district-control; save atomicity/recovery; active-city/route-marker performance; manifest/service-worker regressions.
+          - Chromium at 390x844: physical-source gating, multi-route network planning, security/notoriety response, hidden-route discovery gating, real local `Game.pendingPath`, save/load mid-chain, every chosen district transfer through canonical `travelDistrictV133`, destination `Game.pendingPath`, physical delivery, rewards and mobile overflow checks.
+          - Candidate 01 local-dispatch Chromium regression plus existing operation-routing and mission-stage browser regressions.
 
-## Known limits
-- Candidate 02 plans up to five transit legs and permits one active logistics chain at a time. This keeps route state legible while the city graph is still compact.
-- Security/metro restrictions are quoted from the same canonical reputation/notoriety rules, but bribe-versus-hack is still chosen in the existing transit UI at the actual checkpoint; the logistics planner does not auto-select or auto-pay a bypass.
-- Route risk is a planning estimate from transit type/access state plus source-neighborhood pressure. Canonical PWA12.104 does not yet contain the later experimental Live District Incidents system, so this candidate does not falsely depend on it.
-- Accepted contracts lock their payout/deadline. Mid-job route deviations can replan remaining links but do not retroactively renegotiate the contract.
+          ## Known limits
+          - Candidate 02 plans up to five transit legs and permits one active logistics chain at a time.
+          - Security/metro restrictions are quoted from the same canonical reputation/notoriety rules, but bribe-versus-hack is still chosen in the existing transit UI at the actual checkpoint; logistics never auto-selects or auto-pays a bypass.
+          - Route risk is a planning estimate from transit type/access state plus source-neighborhood pressure. Canonical PWA12.104 does not contain the later experimental Live District Incidents system, so Candidate 02 does not falsely depend on it.
+          - Accepted contracts lock payout/deadline. Mid-job deviations can replan remaining links but do not retroactively renegotiate the contract.
 
-## Next city target
-Build **persistent transit intelligence and checkpoint volatility** on canonical: observed checkpoint delays, faction inspections, temporary closures and smuggler rumors should alter route forecasts over time, creating a reason to maintain contacts and scout districts before committing high-value cross-city logistics.
-'''
-          pathlib.Path('DEVELOPMENT_NOTE_PWA12_104_INTERDISTRICT_LOGISTICS_CANDIDATE_02.md').write_text(note,encoding='utf-8')
-          print(note)
-          PY
+          ## Next city target
+          Build **persistent transit intelligence and checkpoint volatility** on canonical: observed checkpoint delays, faction inspections, temporary closures and smuggler rumors should alter route forecasts over time, creating a reason to maintain contacts and scout districts before committing high-value cross-city logistics.
+          EOF
           cp DEVELOPMENT_NOTE_PWA12_104_INTERDISTRICT_LOGISTICS_CANDIDATE_02.md "$GITHUB_WORKSPACE/out/"
           cp qa/pwa12-104-interdistrict-logistics-mobile.png "$GITHUB_WORKSPACE/out/"
           cp build-meta.json "$GITHUB_WORKSPACE/out/BUILD_META.json"
           C='Chrome_Requiem_v14_PWA_pwa12_104_INTERDISTRICT_LOGISTICS_CANDIDATE_02'
-          cd ..; mv "$(basename "$ROOT")" "$C"; zip -qr "$GITHUB_WORKSPACE/out/${C}_source.zip" "$C"
+          cd ..
+          mv "$(basename "$ROOT")" "$C"
+          zip -qr "$GITHUB_WORKSPACE/out/${C}_source.zip" "$C"
           sha256sum "$GITHUB_WORKSPACE/out/${C}_source.zip" | tee "$GITHUB_WORKSPACE/out/SHA256.txt"
       - uses: actions/upload-artifact@v4
         with:
