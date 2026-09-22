@@ -55,12 +55,17 @@ with sync_playwright() as pw:
     assert pushed['risk']>=pushed['before']['risk'] and pushed['heatAfter']>pushed['heatBefore'],pushed
     crossed=page.evaluate('''()=>{
       const a=activeInterdistrictDispatchV12104(),op=a.options.find(o=>o.linkId===a.chosenLinkId),w=currentDistrictV133(),node=w.transit.find(t=>t.id===op.sourceNodeId);Game.ovPlayer={x:node.x,y:node.y};Game.districtWorldsV133.positions[w.id]={x:node.x,y:node.y};Game.pendingPath=null;
-      const before={day:Game.day,hour:Game.hour,credits:Game.credits},ok=travelDistrictV133(op.linkId,'clear'),after=activeInterdistrictDispatchV12104(),nw=currentDistrictV133();return{ok,before,afterTime:{day:Game.day,hour:Game.hour,credits:Game.credits},district:nw.id,phase:after?.phase,targetKnown:!!Game.cityLife.discovered[after?.targetId],path:Game.pendingPath?.length||0,target:after?.targetId};
+      /* Candidate 07 may now legitimately materialize a free-roam control post on the
+         stressed corridor. Clear it through its public physical Hacker interaction rather
+         than bypassing the new system, while keeping this regression focused on Candidate
+         03's disruption/deadline/last-mile behavior when Candidate 07 is present. */
+      let postCleared=null; if(typeof controlPostForLinkV12104==='function'){const cp=controlPostForLinkV12104(op.linkId,w.id);if(cp){openControlPostV12104(op.linkId);postCleared=spoofControlPostV12104(op.linkId,'hacker')}}
+      const before={day:Game.day,hour:Game.hour,credits:Game.credits},ok=travelDistrictV133(op.linkId,'clear'),after=activeInterdistrictDispatchV12104(),nw=currentDistrictV133();return{ok,postCleared:!!postCleared,before,afterTime:{day:Game.day,hour:Game.hour,credits:Game.credits},district:nw.id,phase:after?.phase,targetKnown:!!Game.cityLife.discovered[after?.targetId],path:Game.pendingPath?.length||0,target:after?.targetId};
     }''')
     assert crossed['ok'] and crossed['district']==setup['targetDistrict'] and crossed['phase']=='last_mile' and crossed['targetKnown'] and crossed['path']>0,crossed
     completed=page.evaluate('''()=>{const w=currentDistrictV133(),a=activeInterdistrictDispatchV12104(),p=w.locations[a.targetId],before=Game.credits;Game.ovPlayer={x:p.x,y:p.y};Game.districtWorldsV133.positions[w.id]={x:p.x,y:p.y};Game.pendingPath=null;onStreetStepV134(w);const s=ensureDistrictDispatchStateV12104(),last=s.history[0];return{before,after:Game.credits,active:s.active,last:last&&{id:last.id,status:last.status,reward:last.reward,cross:!!last.crossDistrict,disruption:last.dynamicDisruption},stats:s.stats}}''')
     assert completed['active'] is None and completed['last']['id']==setup['offerId'] and completed['last']['status']=='delivered' and completed['last']['cross'],completed
     assert completed['last']['disruption']['status']=='pushed' and completed['after']==completed['before']+completed['last']['reward'],completed
     assert not errors,errors
-    print('PASS dynamic disruption browser: physical halt, persistent alert, alternate physical reroute, push-through cost, preserved deadline, canonical transit, last-mile delivery, 390x844 UI')
+    print('PASS dynamic disruption browser: physical halt, persistent alert, alternate physical reroute, push-through cost, preserved deadline, canonical transit, Candidate07 physical post compatibility, last-mile delivery, 390x844 UI')
     ctx.close();browser.close()
