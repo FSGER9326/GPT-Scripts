@@ -40,7 +40,7 @@ jobs:
           python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
           python3 -c "import json;m=json.load(open('build-meta.json'));assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m;assert m['buildHash']=='4313da4acd4c324a7672c36e',m;assert m['schemaVersion']==14,m;print('VERIFIED EXACT CANONICAL',m)"
           echo "ROOT=$PWD" >> "$GITHUB_ENV"
-      - name: Apply cumulative city candidates and dynamic disruption candidate
+      - name: Reapply and verify inherited city Candidate 01-02 layer
         shell: bash
         run: |
           set -euo pipefail
@@ -49,9 +49,17 @@ jobs:
           python3 scripts/cr_city_interdistrict_logistics_ui_preserve.py "$ROOT"
           python3 scripts/cr_city_interdistrict_lastmile_atomic_patch.py "$ROOT"
           python3 scripts/cr_city_runtime_bundle_order_patch.py "$ROOT"
-          python3 scripts/cr_city_dynamic_disruptions_patch.py "$ROOT"
           cp scripts/cr_city_dispatches_cumulative_contract.py "$ROOT/tests/pwa12_104_city_dispatches_cumulative_contract.py"
           cp scripts/cr_city_interdistrict_logistics_contract.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_contract.py"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tests/pwa12_104_city_dispatches_cumulative_contract.py .
+          python3 tests/pwa12_104_city_interdistrict_logistics_contract.py .
+      - name: Apply and build Dynamic Disruptions Candidate 03
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_dynamic_disruptions_patch.py "$ROOT"
           cp scripts/cr_city_dynamic_disruptions_contract.py "$ROOT/tests/pwa12_104_city_dynamic_disruptions_contract.py"
           cp scripts/cr_city_dispatches_browser.py "$ROOT/tests/pwa12_104_city_dispatches_browser.py"
           cp scripts/cr_city_interdistrict_logistics_browser.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_browser.py"
@@ -65,13 +73,11 @@ jobs:
           node --check src/world/dynamic-logistics-disruptions-pwa12-104-city-candidate-03.js
           node --check src/world/district-worlds-v13-3.js
           node --check src/runtime/runtime-bundle.js
-      - name: Focused and inherited regressions
+      - name: Candidate 03 and canonical regressions
         shell: bash
         run: |
           set -euo pipefail
           cd "$ROOT"
-          python3 tests/pwa12_104_city_dispatches_cumulative_contract.py .
-          python3 tests/pwa12_104_city_interdistrict_logistics_contract.py .
           python3 tests/pwa12_104_city_dynamic_disruptions_contract.py .
           python3 tests/pwa12_104_street_contact_support_contract.py
           python3 tests/pwa12_103_district_control_context_contract.py
