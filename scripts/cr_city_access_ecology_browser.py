@@ -25,17 +25,14 @@ with sync_playwright() as pw:
       return{src:src.id,contact:src.contact,offerId:offer.id,accepted:ok,linkId:metro.linkId,linkType:metro.linkType,sourceNode:metro.sourceNodeId,target:a.targetDistrict,phase:a.phase,trust:src.contact?Game.contactRelations[src.contact].trust:null};
     }''')
     assert setup['accepted'] and setup['phase']=='choose_transit',setup
-    # Make the actual neighborhoods around both physical transit endpoints hot and heavily secured.
     pressured=page.evaluate('''q=>{
       const l=V133_TRANSIT_LINKS.find(x=>x.id===q.linkId),a=l.from.district==='old_market'?l.from:l.to,b=l.from.district==='old_market'?l.to:l.from;
       function press(d,node){const w=generateDistrictV133(d),tr=w.transit.find(x=>x.id===node),states=ensureNeighborhoodStateV134(w);let id=null,bd=1e9;for(const n of w.neighborhoods){const dd=Math.hypot(tr.x-n.x,tr.y-n.y);if(dd<bd){bd=dd;id=n.id}}Object.assign(states[id],{localHeat:88,security:5,gangPressure:2,unrest:2,controller:'local'});return id}
       const h1=press(a.district,a.node),h2=press(b.district,b.node);refreshTransitAccessEcologyV12104();updateInterdistrictDispatchUIV12104();decorateTransitAccessEcologyV12104();const eco=evaluateTransitAccessEcologyV12104(q.linkId,'old_market','courier'),p=document.getElementById('v12104-multihop-panel'),btn=p?.querySelector(`[data-multi-link="${q.linkId}"]`),box=btn?.closest('.choice'),r=p?.getBoundingClientRect();return{eco,h1,h2,text:box?.textContent||'',disabled:!!btn?.disabled,sponsor:!!box?.querySelector('.v12104-eco-sponsor'),width:r?.width||0,left:r?.left||0,right:r?.right||0,scroll:document.documentElement.scrollWidth,inner:innerWidth};
     }''',setup)
-    # If deterministic multi-hop target did not expose a metro, validate whichever physical option it did expose by choosing type-appropriate pressure.
     if setup['linkType']=='metro':
-        assert pressured['eco']['blocked'] and pressured['eco']['label']=='METRO ID SWEEP'],pressured
+        assert pressured['eco']['blocked'] and pressured['eco']['label']=='METRO ID SWEEP',pressured
     else:
-        # High heat/security must at least alter or lock non-hidden surface access; hidden remains the designed bypass.
         assert pressured['eco']['label']!='OPEN ACCESS' or setup['linkType']=='hidden',pressured
     if pressured['eco']['blocked']:
         assert pressured['disabled'] and pressured['sponsor'],pressured
@@ -56,7 +53,6 @@ with sync_playwright() as pw:
     crossed=page.evaluate('''()=>{const a=activeMultiHopDispatchV12104(),op=a.chosenOption,w=currentDistrictV133(),n=w.transit.find(t=>t.id===op.sourceNodeId),beforeCredits=Game.credits,beforeMin=Math.round((((Game.day||1)-1)*24+(Game.hour||0))*60),eco=evaluateTransitAccessEcologyV12104(op.linkId,w.id,a.kind);Game.ovPlayer={x:n.x,y:n.y};Game.districtWorldsV133.positions[w.id]={x:n.x,y:n.y};Game.pendingPath=null;const ok=travelDistrictV133(op.linkId,'clear'),afterMin=Math.round((((Game.day||1)-1)*24+(Game.hour||0))*60),b=activeMultiHopDispatchV12104();return{ok,from:w.id,to:currentDistrictV133()?.id,phase:b?.phase,path:Game.pendingPath?.length||0,beforeCredits,afterCredits:Game.credits,timeDelta:afterMin-beforeMin,eco,history:Game.livingStreetsV134.accessEcology.history[0],stats:Game.livingStreetsV134.accessEcology.stats}}''')
     assert crossed['ok'] and crossed['to']==setup['target'] and crossed['phase']=='last_mile' and crossed['path']>0,crossed
     assert crossed['timeDelta']>=1 and crossed['stats']['crossings']>=1 and crossed['history']['type']=='crossing',crossed
-    # Independent ecology checks: friendly faction control improves security access and discovered hidden links remain a bypass.
     systemic=page.evaluate('''()=>{
       const sec=V133_TRANSIT_LINKS.find(l=>l.type==='security'),hid=V133_TRANSIT_LINKS.find(l=>l.type==='hidden'),freight=V133_TRANSIT_LINKS.find(l=>l.type==='freight');
       let friendly=null,covert=null,toll=null;
