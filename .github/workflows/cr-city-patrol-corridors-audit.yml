@@ -1,0 +1,121 @@
+name: CR City Patrol Corridors Preedit Audit
+
+on:
+  push:
+    branches: [chrome-requiem-city-patrol-corridors-08]
+    paths:
+      - '.github/workflows/cr-city-patrol-corridors-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct exact PWA12.104 canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          test -n "$INNER"
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          test -n "$ROOT"
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
+          python3 -c "import json;m=json.load(open('build-meta.json'));assert m['buildHash']=='4313da4acd4c324a7672c36e',m;assert m['schemaVersion']==14,m;print('VERIFIED EXACT CANONICAL',m)"
+          echo "ROOT=$PWD" >> "$GITHUB_ENV"
+
+      - name: Audit canonical world map sector travel encounter and state seams
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          root=Path(os.environ['ROOT'])
+          files=[
+            root/'src/world/district-worlds-v13-3.js',
+            root/'src/world/living-streets-v13-4a.js',
+            root/'src/legacy/city-life-v13.js',
+            root/'src/runtime/legacy-save-bridge.js',
+            root/'src/bootstrap/module-manifest.js',
+          ]
+          keys=['findDistrictPathV133','routeToTransitNodeV133','travelDistrictV133','openTransitNodeV133','Game.pendingPath','ensureLivingStreetsStateV134','ensureNeighborhoodStateV134','drawLivingStreetsV134','handleLivingStreetTapV134','onStreetStepV134','runEncounterDirectorV134','streetMemory','Street Memory','memory']
+          for p in files:
+            print('\n===== CANONICAL',p.relative_to(root),'=====')
+            s=p.read_text(encoding='utf-8')
+            for k in keys:
+              hits=list(re.finditer(re.escape(k),s,re.I))
+              if not hits: continue
+              print(f'--- {k}: {len(hits)} hits ---')
+              for m in hits[:4]:
+                a=max(0,m.start()-700);b=min(len(s),m.end()+1500)
+                print(s[a:b].replace('\r',''))
+          PY
+
+      - name: Reapply cumulative City Candidates 01-07
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_dispatches_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_ui_preserve.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_lastmile_atomic_patch.py "$ROOT"
+          python3 scripts/cr_city_runtime_bundle_order_patch.py "$ROOT"
+          python3 scripts/cr_city_dynamic_disruptions_patch.py "$ROOT"
+          python3 scripts/cr_city_dynamic_disruptions_time_fix.py "$ROOT"
+          python3 scripts/cr_city_multihop_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_multihop_ui_entry_fix.py "$ROOT"
+          python3 scripts/cr_city_access_ecology_patch_seam_fix.py scripts/cr_city_access_ecology_patch.py
+          python3 scripts/cr_city_access_ecology_patch.py "$ROOT"
+          python3 scripts/cr_city_transit_incidents_patch.py "$ROOT"
+          python3 scripts/cr_city_transit_incidents_persistence_fix.py "$ROOT"
+          python3 scripts/cr_city_control_posts_patch_seam_fix.py scripts/cr_city_control_posts_patch.py
+          python3 scripts/cr_city_control_posts_patch.py "$ROOT"
+          python3 scripts/cr_city_control_posts_ecology_clearance_fix.py "$ROOT"
+          python3 scripts/cr_city_control_posts_route_wakeup_fix.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-control-posts-candidate.07'
+          node --check src/runtime/runtime-bundle.js
+
+      - name: Audit cumulative Candidate 07 route and information seams
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          root=Path(os.environ['ROOT'])
+          world=root/'src/world'
+          files=[root/'src/world/district-worlds-v13-3.js',root/'src/world/living-streets-v13-4a.js',root/'src/world/district-control-posts-pwa12-104-city-candidate-07.js',root/'src/world/access-ecology-pwa12-104-city-candidate-05.js',root/'src/bootstrap/module-manifest.js']
+          files += sorted(p for p in world.glob('*.js') if 'memory' in p.name.lower() or 'street' in p.name.lower())
+          seen=set();files=[p for p in files if p.exists() and not (str(p) in seen or seen.add(str(p)))]
+          keys=['findDistrictPathV133','routeToTransitNodeV133','Game.pendingPath','controlPostsForWorldV12104','controlPostForLinkV12104','routeControlPostV12104','drawLivingStreetsV134','handleLivingStreetTapV134','onStreetStepV134','streetMemory','Street Memory','visited','discovered','known']
+          print('\nWORLD MODULES:')
+          for p in sorted(world.glob('*.js')): print(p.name)
+          for p in files:
+            s=p.read_text(encoding='utf-8')
+            print('\n===== CUMULATIVE',p.relative_to(root),'=====')
+            for k in keys:
+              hits=list(re.finditer(re.escape(k),s,re.I))
+              if not hits: continue
+              print(f'--- {k}: {len(hits)} hits ---')
+              for m in hits[:6]:
+                a=max(0,m.start()-900);b=min(len(s),m.end()+1900)
+                print(s[a:b].replace('\r',''))
+          PY
