@@ -28,7 +28,6 @@ with sync_playwright() as pw:
     assert setup['post'] and setup['post']['x']==setup['node']['x'] and setup['post']['y']==setup['node']['y'],setup
     assert setup['post']['ecology']['blocked'],setup
 
-    # Ordinary transit cannot bypass the physical post even without a dispatch/job.
     bypass=page.evaluate('''q=>{const before=currentDistrictV133().id,player={x:Game.ovPlayer.x,y:Game.ovPlayer.y},ok=travelDistrictV133(q.linkId,'clear');return{ok,before,after:currentDistrictV133().id,player,now:{x:Game.ovPlayer.x,y:Game.ovPlayer.y}}}''',setup)
     assert not bypass['ok'] and bypass['before']==bypass['after'] and bypass['player']==bypass['now'],bypass
 
@@ -36,8 +35,6 @@ with sync_playwright() as pw:
     assert routed['ok'] and routed['path']>1 and routed['target']['kind']=='v12104controlpost' and routed['approach']['linkId']==setup['linkId'],routed
     assert routed['before']==routed['after'],routed
 
-    # Save while approaching, destroy transient route in memory, reload and verify the
-    # persisted physical objective reconstructs a real A-star pendingPath.
     assert page.evaluate('()=>saveGame(9,true)') is True
     restored=page.evaluate('''()=>{Game.pendingPath=null;Game._v133TravelTarget=null;Game.livingStreetsV134.controlPosts.approach=null;const ok=loadGame(9);showScreen('overworld-screen');initOverworldV133();return{ok,approach:Game.livingStreetsV134?.controlPosts?.approach}}''')
     assert restored['ok'] and restored['approach']['linkId']==setup['linkId'],restored
@@ -45,9 +42,6 @@ with sync_playwright() as pw:
     resumed=page.evaluate('''()=>({path:Game.pendingPath.length,target:Game._v133TravelTarget,player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y}})''')
     assert resumed['path']>1 and resumed['target']['linkId']==setup['linkId'],resumed
 
-    # Let the real overworld movement loop walk the crew to the post. Encounter-director
-    # randomness was suppressed in the QA save, but movement, onStreetStep and arrival
-    # detection remain the production path.
     page.wait_for_function("()=>{const p=document.getElementById('v12104-control-post-panel');return p&&!p.hidden&&Game.livingStreetsV134?.controlPosts?.engaged?.linkId==='old_civic_gate'}",timeout=30000)
     engaged=page.evaluate('''q=>{const p=document.getElementById('v12104-control-post-panel'),r=p.getBoundingClientRect(),post=controlPostForLinkV12104(q.linkId,'old_market'),buttons=[...p.querySelectorAll('button')].map(b=>({text:b.textContent.trim(),h:b.getBoundingClientRect().height}));return{dist:post?Math.hypot(Game.ovPlayer.x-post.x,Game.ovPlayer.y-post.y):null,width:r.width,left:r.left,right:r.right,scroll:document.documentElement.scrollWidth,inner:innerWidth,buttons,text:p.textContent,engaged:Game.livingStreetsV134.controlPosts.engaged,path:Game.pendingPath?.length||0}}''',setup)
     assert engaged['engaged']['linkId']==setup['linkId'] and engaged['dist'] is not None and engaged['dist']<=1.7,engaged
@@ -56,23 +50,17 @@ with sync_playwright() as pw:
     assert any('HACKER' in x['text'] for x in engaged['buttons']),engaged
     page.screenshot(path=str(ROOT/'qa/pwa12-104-city-control-posts-mobile.png'),full_page=True)
 
-    # Resolve in-world with the Hacker. Local/faction consequences, a one-crossing
-    # clearance and its persistence are all real game state.
-    hacked=page.evaluate('''q=>{const p=controlPostForLinkV12104(q.linkId,'old_market'),h=ensureNeighborhoodStateV134(currentDistrictV133())[p.neighborhood],before={min:Math.round((((Game.day||1)-1)*24+(Game.hour||0))*60),heat:h.localHeat,fheat:Number(Game.heat?.[p.faction]||0)},ok=spoofControlPostV12104(q.linkId,'hacker'),c=Game.livingStreetsV134.controlPosts.clearances[q.linkId],after={min:Math.round((((Game.day||1)-1)*24+(Game.hour||0))*60),heat:h.localHeat,fheat:Number(Game.heat?.[p.faction]||0)},post:controlPostForLinkV12104(q.linkId,'old_market');return{ok,before,after,c,post}}''',setup)
+    hacked=page.evaluate('''q=>{const p=controlPostForLinkV12104(q.linkId,'old_market'),h=ensureNeighborhoodStateV134(currentDistrictV133())[p.neighborhood],before={min:Math.round((((Game.day||1)-1)*24+(Game.hour||0))*60),heat:h.localHeat,fheat:Number(Game.heat?.[p.faction]||0)},ok=spoofControlPostV12104(q.linkId,'hacker'),c=Game.livingStreetsV134.controlPosts.clearances[q.linkId],after={min:Math.round((((Game.day||1)-1)*24+(Game.hour||0))*60),heat:h.localHeat,fheat:Number(Game.heat?.[p.faction]||0)},post=controlPostForLinkV12104(q.linkId,'old_market');return{ok,before,after,c,post}}''',setup)
     assert hacked['ok'] and hacked['c'] and not hacked['c']['consumed'] and hacked['c']['method']=='hacker' and hacked['post'] is None,hacked
     assert hacked['after']['min']-hacked['before']['min']==3 and hacked['after']['heat']>=hacked['before']['heat'],hacked
     assert page.evaluate('()=>saveGame(10,true)') is True
     persisted=page.evaluate('''q=>{Game.livingStreetsV134.controlPosts.clearances={};const ok=loadGame(10),c=Game.livingStreetsV134?.controlPosts?.clearances?.[q.linkId];return{ok,c}}''',setup)
     assert persisted['ok'] and persisted['c'] and not persisted['c']['consumed'],persisted
 
-    # Crossing is still the canonical district travel authority. Candidate 07 merely
-    # clears its own physical friction once, and the clearance is consumed afterward.
     crossed=page.evaluate('''q=>{const before=currentDistrictV133().id,credits=Game.credits,ok=travelDistrictV133(q.linkId,'clear'),st=Game.livingStreetsV134.controlPosts,c=st.clearances[q.linkId];return{ok,before,after:currentDistrictV133().id,creditsBefore:credits,creditsAfter:Game.credits,c,history:st.history[0],stats:st.stats}}''',setup)
     assert crossed['ok'] and crossed['before']=='old_market' and crossed['after']=='civic_circuit',crossed
     assert crossed['c']['consumed'] and crossed['stats']['crossings']>=1 and crossed['history']['type']=='crossing',crossed
 
-    # Separate violent free-roam resolution: no dispatch, same physical post, existing
-    # Living Streets tactical bridge, and temporary suppression after victory.
     fight_setup=page.evaluate('''q=>{activateDistrictV133('old_market');showScreen('overworld-screen');initOverworldV133();const w=currentDistrictV133(),st=ensureLivingStreetsStateV134();st.lastEventStep=st.stepCount+999999;const c=st.controlPosts.clearances[q.linkId];if(c)c.consumed=true;delete st.controlPosts.suppressed['old_market:'+q.linkId];const p=controlPostForLinkV12104(q.linkId,'old_market');if(!p)throw new Error('control post did not reform after consumed clearance');Game.ovPlayer={x:p.x,y:p.y};Game.districtWorldsV133.positions.old_market={x:p.x,y:p.y};const opened=openControlPostV12104(q.linkId),ok=fightControlPostV12104(q.linkId);return{opened,ok,active:Game.activeMission?{street:!!Game.activeMission.v134StreetEncounter,actor:Game.activeMission.v134StreetActorType}:null,combat:st.controlPosts.activeCombat}}''',setup)
     assert fight_setup['opened'] and fight_setup['ok'] and fight_setup['active']['street'] and fight_setup['combat'],fight_setup
     page.wait_for_function('()=>!!Game.activeMission?.v134StreetEncounter',timeout=5000)
