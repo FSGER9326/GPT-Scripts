@@ -1,0 +1,28 @@
+name: Chrome Requiem Social 138 Inspect
+on:
+  push:
+    branches: [agent/chrome-requiem-social-20260922]
+jobs:
+  inspect138:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download QA-verified source
+        run: |
+          curl --fail --location --retry 3 --output source138.zip "$(cat ci/source138_url.txt)"
+          test "$(stat -c%s source138.zip)" -gt 80000000
+      - name: Inspect exact social integration
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          z=zipfile.ZipFile('source138.zip'); ns=z.namelist(); idx=next(n for n in ns if n.endswith('/index.html')); root=idx[:-10]
+          print('ROOT',root); print('META',z.read(root+'build-meta.json').decode())
+          wanted=['src/company/recovery-network-v14.js','src/company/crew-intercession-v14.js','src/bootstrap/module-manifest.js','src/bootstrap/compatibility-manifest.js','tools/build_pwa11.py']
+          for rel in wanted:
+            print('\n===== '+rel+' ====='); p=root+rel
+            if p not in ns: print('MISSING'); continue
+            for i,l in enumerate(z.read(p).decode('utf-8','replace').splitlines(),1): print(f'{i:04d}: {l}')
+          print('\n===== RELEVANT FILES =====')
+          for n in ns:
+            if 'intercession' in n.lower() or 'recovery' in n.lower(): print(n[len(root):] if n.startswith(root) else n)
+          PY
