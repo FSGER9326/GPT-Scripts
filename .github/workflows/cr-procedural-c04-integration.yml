@@ -22,23 +22,16 @@ jobs:
           mkdir -p work out
           curl -fL --retry 3 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-db6c-820a-bcca-e52d7af087a2/raw?se=2026-09-22T01%3A28%3A59Z&sp=r&sv=2026-02-06&sr=b&scid=c2606c22-bfe1-5dc4-85d9-f9e2474bf5f9&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T20%3A37%3A50Z&ske=2026-09-22T20%3A37%3A50Z&sks=b&skv=2026-02-06&sig=gOLVqDw0YHURfB0UUCpnmoqbe4T2G8joI2FXkalitiI%3D' -o candidate03.zip
           unzip -q candidate03.zip -d work
-      - name: Inspect browser QA patterns
+      - name: Inspect contract approach source
         shell: bash
         run: |
           set -euo pipefail
           ROOT=work/cr_proc_route_candidate_03
-          {
-            echo '=== EGRESS BROWSER ==='
-            cat "$ROOT/tests/pwa12_104_procedural_egress_route_browser.py"
-            echo '=== OPTIONAL BROWSER ==='
-            cat "$ROOT/tests/pwa12_104_procedural_optional_clause_browser.py"
-            echo '=== FACTION BROWSER ==='
-            cat "$ROOT/tests/pwa12_104_procedural_faction_transition_browser.py"
-          } | tee out/browser_patterns.txt
+          cat "$ROOT/src/missions/contract-approaches-v13-4b.js" | tee out/contract-approaches-v13-4b.js.txt
       - name: Upload inspection evidence
         uses: actions/upload-artifact@v4
         with:
-          name: CR-Procedural-C04-Browser-Patterns
-          path: out/browser_patterns.txt
+          name: CR-Procedural-C04-Approach-Source
+          path: out/contract-approaches-v13-4b.js.txt
           if-no-files-found: error
           retention-days: 7
