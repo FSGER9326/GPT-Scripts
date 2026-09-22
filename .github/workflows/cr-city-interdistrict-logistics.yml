@@ -9,6 +9,7 @@ on:
       - 'scripts/cr_city_runtime_bundle_order_patch.py'
       - 'scripts/cr_city_interdistrict_logistics_contract.py'
       - 'scripts/cr_city_interdistrict_logistics_browser.py'
+      - 'scripts/cr_city_dispatches_browser_lifecycle_patch.py'
       - 'scripts/cr_city_dispatches_cumulative_contract.py'
       - 'scripts/cr_city_interdistrict_logistics_note.py'
   workflow_dispatch:
@@ -55,6 +56,7 @@ jobs:
           cp scripts/cr_city_interdistrict_logistics_contract.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_contract.py"
           cp scripts/cr_city_dispatches_browser.py "$ROOT/tests/pwa12_104_city_dispatches_browser.py"
           cp scripts/cr_city_interdistrict_logistics_browser.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_browser.py"
+          python3 scripts/cr_city_dispatches_browser_lifecycle_patch.py "$ROOT"
           cd "$ROOT"
           python3 tools/rebundle_runtime.py
           python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-interdistrict-logistics-candidate.02'
