@@ -20,7 +20,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work out
-          curl -fL --retry 3 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-a1fc-820a-b68f-97270d5d88d1/raw?se=2026-09-22T01%3A23%3A02Z&sp=r&sv=2026-02-06&sr=b&scid=26c9758a-ea76-566c-baa7-40a6e078914f&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T00%3A06%3A08Z&ske=2026-09-23T00%3A06%3A08Z&sks=b&skv=2026-02-06&sig=GAilk7O/ZFIZ5bqC4ISWqR/F62q%2BRrZk25jxTXaunsw%3D' -o candidate03.zip
+          curl -fL --retry 3 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-db6c-820a-bcca-e52d7af087a2/raw?se=2026-09-22T01%3A28%3A59Z&sp=r&sv=2026-02-06&sr=b&scid=c2606c22-bfe1-5dc4-85d9-f9e2474bf5f9&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T20%3A37%3A50Z&ske=2026-09-22T20%3A37%3A50Z&sks=b&skv=2026-02-06&sig=gOLVqDw0YHURfB0UUCpnmoqbe4T2G8joI2FXkalitiI%3D' -o candidate03.zip
           unzip -q candidate03.zip -d work
       - name: Inspect browser QA patterns
         shell: bash
