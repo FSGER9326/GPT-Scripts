@@ -6,6 +6,7 @@ on:
       - '.github/workflows/cr-city-interdistrict-logistics.yml'
       - 'scripts/cr_city_interdistrict_logistics_patch.py'
       - 'scripts/cr_city_interdistrict_logistics_ui_preserve.py'
+      - 'scripts/cr_city_runtime_bundle_order_patch.py'
       - 'scripts/cr_city_interdistrict_logistics_contract.py'
       - 'scripts/cr_city_interdistrict_logistics_browser.py'
       - 'scripts/cr_city_dispatches_cumulative_contract.py'
@@ -49,6 +50,7 @@ jobs:
           python3 scripts/cr_city_dispatches_patch.py "$ROOT"
           python3 scripts/cr_city_interdistrict_logistics_patch.py "$ROOT"
           python3 scripts/cr_city_interdistrict_logistics_ui_preserve.py "$ROOT"
+          python3 scripts/cr_city_runtime_bundle_order_patch.py "$ROOT"
           cp scripts/cr_city_dispatches_cumulative_contract.py "$ROOT/tests/pwa12_104_city_dispatches_cumulative_contract.py"
           cp scripts/cr_city_interdistrict_logistics_contract.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_contract.py"
           cp scripts/cr_city_dispatches_browser.py "$ROOT/tests/pwa12_104_city_dispatches_browser.py"
