@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/cr-city-dynamic-disruptions.yml'
       - 'scripts/cr_city_dynamic_disruptions_patch.py'
+      - 'scripts/cr_city_dynamic_disruptions_time_fix.py'
       - 'scripts/cr_city_dynamic_disruptions_contract.py'
       - 'scripts/cr_city_dynamic_disruptions_browser.py'
       - 'scripts/cr_city_dynamic_disruptions_note.py'
@@ -60,6 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/cr_city_dynamic_disruptions_patch.py "$ROOT"
+          python3 scripts/cr_city_dynamic_disruptions_time_fix.py "$ROOT"
           cp scripts/cr_city_dynamic_disruptions_contract.py "$ROOT/tests/pwa12_104_city_dynamic_disruptions_contract.py"
           cp scripts/cr_city_dispatches_browser.py "$ROOT/tests/pwa12_104_city_dispatches_browser.py"
           cp scripts/cr_city_interdistrict_logistics_browser.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_browser.py"
