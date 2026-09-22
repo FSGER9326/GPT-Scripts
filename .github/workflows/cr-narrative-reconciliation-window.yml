@@ -1,0 +1,185 @@
+name: Chrome Requiem Narrative Reconciliation Window
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cr-narrative-reconciliation-window.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SOURCE_URL: 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-e260-820a-a4a8-310e29c80ae0/raw?se=2026-09-22T03%3A08%3A52Z&sp=r&sv=2026-02-06&sr=b&scid=8d4ab648-fed9-5ff2-85ae-526873584e8c&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A40%3A00Z&ske=2026-09-22T21%3A40%3A00Z&sks=b&skv=2026-02-06&sig=dtSJ/m5vvIIbuVtkhM2uD0rE9eNaXgcHjvoSNXb9VL0%3D'
+  VERSION: '14.0.0-pwa.12.136-narrative-reconciliation-window-candidate.01'
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and verify exact PWA12.136 cumulative base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work out
+          curl --fail --location --retry 2 --output base.zip "$SOURCE_URL"
+          unzip -q base.zip -d work
+          ROOT=$(find work -mindepth 1 -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_136_INTEGRATION_RELEASE_CANDIDATE_01_source' -print -quit)
+          test -n "$ROOT"
+          python3 - "$ROOT" <<'PY'
+          import json,sys
+          from pathlib import Path
+          root=Path(sys.argv[1]);m=json.loads((root/'build-meta.json').read_text())
+          assert m['version']=='14.0.0-pwa.12.136-integration-release-candidate.01',m
+          assert m['buildHash']=='93ded980c47a0abfde407f56',m
+          assert m['schemaVersion']==14,m
+          assert (root/'src/narrative/quiet-census-v14.js').exists()
+          assert 'loc_helix_hidden_1' in (root/'src/legacy/city-life-v13.js').read_text()
+          print('VERIFIED_BASE',m)
+          PY
+          echo "ROOT=$GITHUB_WORKSPACE/$ROOT" >> "$GITHUB_ENV"
+
+      - name: Apply Reconciliation Window content slice and rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_pwa12_136_reconciliation_window_patch.py "$ROOT"
+          cp scripts/cr_pwa12_136_reconciliation_window_contract.mjs "$ROOT/tests/pwa12_136_reconciliation_window_contract.mjs"
+          cp scripts/cr_pwa12_136_reconciliation_window_browser.py "$ROOT/tests/pwa12_136_reconciliation_window_browser.py"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py | tee "$GITHUB_WORKSPACE/out/rebundle.log"
+          python3 tools/build_pwa11.py "$VERSION" | tee "$GITHUB_WORKSPACE/out/build.log"
+          cp build-meta.json "$GITHUB_WORKSPACE/out/BUILD_META.json"
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build-meta.json'))
+          assert m['version']=='14.0.0-pwa.12.136-narrative-reconciliation-window-candidate.01',m
+          assert m['schemaVersion']==14,m
+          print('CANDIDATE_META',m)
+          PY
+
+      - name: Focused state, persistence, and bundle contracts
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            node --check src/runtime/runtime-bundle.js
+            node tests/pwa12_136_reconciliation_window_contract.mjs
+            node tests/pwa12_104_quiet_census_contract.mjs
+            node tests/pwa12_104_paper_ghosts_contract.mjs
+            node tests/pwa12_104_market_eyes_contract.mjs
+            node tests/pwa12_71_inflight_save_load_contract.mjs
+            python3 tests/pwa12_31_save_recovery_contract.py
+            python3 tests/pwa12_38_save_snapshot_atomicity_contract.py
+            python3 tests/pwa12_39_js_bundle_perf_contract.py
+            python3 tests/pwa12_37_css_bundle_perf_contract.py
+          } 2>&1 | tee "$GITHUB_WORKSPACE/out/static-regression.log"
+
+      - name: Release preflight
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f tools/release_preflight.py ]; then
+            python3 tools/release_preflight.py 2>&1 | tee "$GITHUB_WORKSPACE/out/release-preflight.log"
+          else
+            echo 'release_preflight.py absent' | tee "$GITHUB_WORKSPACE/out/release-preflight.log"
+          fi
+
+      - name: Prepare Chromium QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          PLAYWRIGHT_CHROMIUM=$(python3 -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()")
+          sudo ln -sf "$PLAYWRIGHT_CHROMIUM" /usr/bin/chromium
+
+      - name: Real Chromium narrative and affected-flow regression
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            python3 tests/pwa12_136_reconciliation_window_browser.py
+            python3 tests/pwa12_104_quiet_census_browser.py
+            python3 tests/pwa12_104_paper_ghosts_browser.py
+            python3 tests/pwa12_104_market_eyes_browser.py
+            python3 tests/pwa12_71_inflight_save_load_browser.py
+            python3 tests/pwa12_79_city_aftermath_browser.py
+            STREET=$(find tests -maxdepth 1 -type f -iname '*street*combat*browser*.py' -print -quit)
+            if [ -n "$STREET" ]; then python3 "$STREET"; else echo 'No dedicated street-combat browser test found by pattern'; fi
+          } 2>&1 | tee "$GITHUB_WORKSPACE/out/browser-regression.log"
+
+      - name: Document and package candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          META=$(cat "$ROOT/build-meta.json")
+          cat > "$ROOT/DEVELOPMENT_NOTE_PWA12_136_NARRATIVE_RECONCILIATION_WINDOW_CANDIDATE_01.md" <<EOF
+          # Chrome Requiem PWA12.136 Narrative — RECONCILIATION WINDOW Candidate 01
+
+          ## Baseline and canonical status
+          Built from verified cumulative noncanonical PWA12.136 Integration Release Candidate 01 (`14.0.0-pwa.12.136-integration-release-candidate.01`, build `93ded980c47a0abfde407f56`, schema 14). The explicit PWA12.104 canonical source was not modified.
+
+          ## Playable slice
+          QUIET CENSUS outcomes now reveal the existing hidden Helix Financial location `loc_helix_hidden_1` / Settlement Vault Annex and create a physical-only RECONCILIATION WINDOW encounter in the ordinary City Network location panel.
+
+          The previous Quiet Census extraction remains materially relevant:
+          - `quiet_census_clean_access` -> AUTHENTICATED GHOST: low-pressure municipal credential, evidence 1/3.
+          - `quiet_census_exception_key` -> EXCEPTION CHANNEL: privileged routing access, evidence 3/3, elevated audit pressure.
+          - `quiet_census_chain_of_custody` -> CUSTODY CLAIM: broker-attested provenance dispute, evidence 2/3, longer action time.
+          - `quiet_census_public_proof` -> PURGE WINDOW: Quiet Census is actively moving records; the encounter copy/state changes and uses authored action time rather than a wall-clock timer.
+
+          At the physical Annex marker the player must make one irreversible decision:
+          - FOLLOW THE PRINCIPAL preserves a principal-side settlement token and writes `quiet_census_principal_trace`, but leaves the live source map addressable (`sourceProtection:'exposed'`).
+          - BURN THE SOURCE MAP deauthorizes the mapped clinic/freight/labor/debt source identities and writes `quiet_census_source_shelter`, but destroys the clean principal trace (`sourceProtection:'hardened'`).
+
+          The Principal is deliberately not identified here. Juno Voss remains a separate Helix contact and is not silently converted into the Principal. ZERO RECEIPT / Palisade staging remains quarantined and was not merged.
+
+          ## Exact source changes
+          - Added `src/narrative/reconciliation-window-v14.js`.
+          - Added `src/styles/37-v14-reconciliation-window.css` with 390px-safe wrapping and >=48px authored action controls.
+          - Registered `narrative.reconciliationWindow` immediately after `narrative.quietCensus` in `src/bootstrap/module-manifest.js`.
+          - Added ordered JS/CSS bundle markers and rebuilt `runtime-bundle.js` / `runtime-bundle.css` from checked-in sources.
+          - Added the two new raw sources to the build precache-exclusion list so shipping continues to use the ordered bundles.
+          - Added `tests/pwa12_136_reconciliation_window_contract.mjs` and `tests/pwa12_136_reconciliation_window_browser.py`.
+
+          ## Persistence
+          No schema bump. Durable state is additive journal metadata under `reconciliation_window_v14`, keyed deterministically from the Quiet Census source mission. Location discovery uses existing `Game.cityLife.discovered`; Meridian pressure uses existing `Game.heat`; action time uses existing `advanceTime`; save/load remains schema 14.
+
+          ## Verification executed by this build
+          See `static-regression.log`, `release-preflight.log`, and `browser-regression.log` in the artifact for exact output. The focused state contract covers all 4 inherited access states x both final decisions, remote/active-mission gating, target discovery, exclusivity/idempotency, consequence deltas, and save-shaped persistence. The Chromium integration executes the actual Market Eyes -> Paper Ghosts -> Quiet Census -> Settlement Vault Annex chain on 1440x900 desktop and 390x844 mobile, clicks the rendered decision controls, checks mobile overflow and >=44px button geometry, captures choice/outcome screenshots, then performs save -> live-state corruption -> runtime reload and compares restored narrative state.
+
+          ## Unresolved continuity / next target
+          FOLLOW THE PRINCIPAL should next trace a blind settlement principal without prematurely naming a Meridian executive. BURN THE SOURCE MAP should next produce a city-level source-protection consequence showing who becomes harder to correlate and what investigative reach was lost. These branches should remain distinct for at least one more playable beat before any convergence.
+
+          ## Build meta
+          ```json
+          $META
+          ```
+          EOF
+          cp "$ROOT/DEVELOPMENT_NOTE_PWA12_136_NARRATIVE_RECONCILIATION_WINDOW_CANDIDATE_01.md" out/
+          mkdir -p out/qa
+          cp -a "$ROOT/qa/pwa12_136_reconciliation_window/." out/qa/
+          CANDIDATE='Chrome_Requiem_v14_PWA_pwa12_136_NARRATIVE_RECONCILIATION_WINDOW_CANDIDATE_01_source'
+          mv "$ROOT" "$GITHUB_WORKSPACE/work/$CANDIDATE"
+          cd "$GITHUB_WORKSPACE/work"
+          zip -qr "$GITHUB_WORKSPACE/out/${CANDIDATE}.zip" "$CANDIDATE"
+          cd "$GITHUB_WORKSPACE"
+          sha256sum "out/${CANDIDATE}.zip" | tee out/SHA256.txt
+          cat out/BUILD_META.json
+          cat out/SHA256.txt
+
+      - name: Upload candidate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-PWA12-136-Reconciliation-Window-Candidate-01
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
