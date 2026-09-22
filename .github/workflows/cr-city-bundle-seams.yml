@@ -1,0 +1,53 @@
+name: CR City Bundle Seam Audit
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cr-city-bundle-seams.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact PWA12.104 canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build-meta.json'))
+          assert m['buildHash']=='4313da4acd4c324a7672c36e',m
+          print('VERIFIED EXACT CANONICAL',m)
+          PY
+          echo "ROOT=$PWD" >> "$GITHUB_ENV"
+      - name: Inspect bundler source-order seams
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '===== tools/rebundle_runtime.py ====='
+          sed -n '1,260p' "$ROOT/tools/rebundle_runtime.py"
+          echo '===== module manifest relevant lines ====='
+          grep -n -C 4 -E 'world\.livingStreets|missions\.approaches|MODULE|ORDER|ordered' "$ROOT/src/bootstrap/module-manifest.js" || true
+          echo '===== other source order references ====='
+          grep -R -n -E "living-streets-v13-4a|world\.livingStreets|runtime-bundle\.js|ordered sources|SOURCE_ORDER|JS_SOURCES|sourceOrder" "$ROOT/tools" "$ROOT/src" --exclude='runtime-bundle.js' --exclude='runtime-bundle.css' | head -n 400 || true
+          echo '===== likely bundle/config files ====='
+          find "$ROOT" -maxdepth 4 -type f \( -iname '*bundle*' -o -iname '*manifest*' -o -iname '*order*' -o -iname '*source*' \) | sort | head -n 300
