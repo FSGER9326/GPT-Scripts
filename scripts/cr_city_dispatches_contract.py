@@ -27,3 +27,4 @@ checks={
 failed=[k for k,v in checks.items() if not v]
 if failed: raise SystemExit('FAIL district dispatch contract: '+', '.join(failed))
 print(f"PASS district dispatch contract: {len(checks)} checks")
+# automation trigger: rerun exact-canonical city dispatch candidate verification
