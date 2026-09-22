@@ -4,6 +4,7 @@ import sys
 
 root = Path(sys.argv[1]).resolve()
 VERSION = '14.0.0-pwa.12.104-narrative-second-signature-candidate.01'
+PLAYER_FEE = 300
 
 module = r'''/* Chrome Requiem PWA12.104 narrative candidate — THE SECOND SIGNATURE.
  * Standalone canonical-line contact beat for Mira / Old Market.
