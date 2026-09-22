@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/cr-city-transit-incidents.yml'
       - 'scripts/cr_city_transit_incidents_patch.py'
+      - 'scripts/cr_city_transit_incidents_persistence_fix.py'
       - 'scripts/cr_city_transit_incidents_contract.py'
       - 'scripts/cr_city_transit_incidents_browser.py'
       - 'scripts/cr_city_transit_incidents_note.py'
@@ -153,6 +154,7 @@ jobs:
           python3 scripts/cr_city_transit_incidents_patch.py "$ROOT"
           cp scripts/cr_city_transit_incidents_contract.py "$ROOT/tests/pwa12_104_city_transit_incidents_contract.py"
           cp scripts/cr_city_transit_incidents_browser.py "$ROOT/tests/pwa12_104_city_transit_incidents_browser.py"
+          python3 scripts/cr_city_transit_incidents_persistence_fix.py "$ROOT"
           cd "$ROOT"
           python3 tools/rebundle_runtime.py
           python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-transit-incidents-candidate.06'
