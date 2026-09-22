@@ -1,0 +1,231 @@
+name: CR City Transit Incidents Candidate 06
+
+on:
+  push:
+    branches: [chrome-requiem-city-transit-incidents-06]
+    paths:
+      - '.github/workflows/cr-city-transit-incidents.yml'
+      - 'scripts/cr_city_transit_incidents_patch.py'
+      - 'scripts/cr_city_transit_incidents_contract.py'
+      - 'scripts/cr_city_transit_incidents_browser.py'
+      - 'scripts/cr_city_transit_incidents_note.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct exact PWA12.104 canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work out
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          test -n "$INNER"
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          test -n "$ROOT"
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
+          python3 -c "import json;m=json.load(open('build-meta.json'));assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m;assert m['buildHash']=='4313da4acd4c324a7672c36e',m;assert m['schemaVersion']==14,m;print('VERIFIED EXACT CANONICAL',m)"
+          echo "ROOT=$PWD" >> "$GITHUB_ENV"
+
+      - name: Pre-edit audit exact canonical city seams
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          root=Path(os.environ['ROOT']);out=Path(os.environ['GITHUB_WORKSPACE'])/'out'/'CANONICAL_PREEDIT_CITY_AUDIT.md'
+          paths=[root/'src/world/district-worlds-v13-3.js',root/'src/world/living-streets-v13-4a.js',root/'src/bootstrap/module-manifest.js']
+          for p in paths:
+            if not p.exists():raise SystemExit(f'MISSING {p}')
+          keys=['findDistrictPathV133','routeToTransitNodeV133','travelDistrictV133','Game.pendingPath','ensureLivingStreetsStateV134','ensureNeighborhoodStateV134','onStreetStepV134','openStreetEventV134','launchStreetCombatV134','settleStreetCombatV134','drawLivingStreetsV134','handleLivingStreetTapV134']
+          chunks=['# Exact PWA12.104 canonical pre-edit city audit\n\nCanonical identity was rebuilt and asserted before inspection. Candidate 06 has not been applied.\n']
+          for p in paths:
+            s=p.read_text();chunks.append(f'\n## {p.relative_to(root)}\n')
+            for k in keys:
+              hits=list(re.finditer(re.escape(k),s))
+              if not hits:continue
+              chunks.append(f'\n### `{k}` — {len(hits)} hits\n')
+              for m in hits[:5]:chunks.append('```js\n'+s[max(0,m.start()-320):min(len(s),m.end()+620)]+'\n```\n')
+          out.write_text(''.join(chunks));print(out)
+          PY
+
+      - name: Reapply City Candidates 01-02 and validate their stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_dispatches_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_ui_preserve.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_lastmile_atomic_patch.py "$ROOT"
+          python3 scripts/cr_city_runtime_bundle_order_patch.py "$ROOT"
+          cp scripts/cr_city_dispatches_cumulative_contract.py "$ROOT/tests/pwa12_104_city_dispatches_cumulative_contract.py"
+          cp scripts/cr_city_interdistrict_logistics_contract.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_contract.py"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tests/pwa12_104_city_dispatches_cumulative_contract.py .
+          python3 tests/pwa12_104_city_interdistrict_logistics_contract.py .
+
+      - name: Reapply City Candidate 03 and validate its stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_dynamic_disruptions_patch.py "$ROOT"
+          python3 scripts/cr_city_dynamic_disruptions_time_fix.py "$ROOT"
+          cp scripts/cr_city_dynamic_disruptions_contract.py "$ROOT/tests/pwa12_104_city_dynamic_disruptions_contract.py"
+          cp scripts/cr_city_dispatches_browser.py "$ROOT/tests/pwa12_104_city_dispatches_browser.py"
+          cp scripts/cr_city_interdistrict_logistics_browser.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_browser.py"
+          cp scripts/cr_city_dynamic_disruptions_browser.py "$ROOT/tests/pwa12_104_city_dynamic_disruptions_browser.py"
+          python3 scripts/cr_city_dispatches_browser_lifecycle_patch.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tests/pwa12_104_city_dynamic_disruptions_contract.py .
+
+      - name: Reapply City Candidate 04 and validate its stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_multihop_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_multihop_ui_entry_fix.py "$ROOT"
+          cp scripts/cr_city_multihop_logistics_contract.py "$ROOT/tests/pwa12_104_city_multihop_logistics_contract.py"
+          cp scripts/cr_city_multihop_logistics_browser.py "$ROOT/tests/pwa12_104_city_multihop_logistics_browser.py"
+          python3 scripts/cr_city_multihop_browser_entry_patch.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-multihop-logistics-candidate.04'
+          python3 tests/pwa12_104_city_multihop_logistics_contract.py .
+
+      - name: Reapply City Candidate 05 and validate its stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_access_ecology_patch_seam_fix.py scripts/cr_city_access_ecology_patch.py
+          python3 scripts/cr_city_access_ecology_patch.py "$ROOT"
+          cp scripts/cr_city_access_ecology_contract.py "$ROOT/tests/pwa12_104_city_access_ecology_contract.py"
+          cp scripts/cr_city_access_ecology_browser.py "$ROOT/tests/pwa12_104_city_access_ecology_browser.py"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-access-ecology-candidate.05'
+          python3 tests/pwa12_104_city_access_ecology_contract.py .
+
+      - name: Audit cumulative city architecture immediately before Candidate 06
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          root=Path(os.environ['ROOT']);out=Path(os.environ['GITHUB_WORKSPACE'])/'out'/'CUMULATIVE_PRE06_CITY_AUDIT.md'
+          paths=[root/'src/world/district-worlds-v13-3.js',root/'src/world/living-streets-v13-4a.js',root/'src/world/interdistrict-logistics-pwa12-104-city-candidate-02.js',root/'src/world/dynamic-logistics-disruptions-pwa12-104-city-candidate-03.js',root/'src/world/multihop-logistics-pwa12-104-city-candidate-04.js',root/'src/world/access-ecology-pwa12-104-city-candidate-05.js']
+          keys=['routeToTransitNodeV133','travelDistrictV133','Game.pendingPath','onStreetStepV134','launchStreetCombatV134','settleStreetCombatV134','activeInterdistrictDispatchV12104','chooseInterdistrictTransitV12104','evaluateTransitAccessEcologyV12104','prepareTransitAccessEcologyV12104','commitTransitAccessEcologyV12104']
+          chunks=['# Cumulative Candidates 01-05 pre-Candidate-06 audit\n\nCandidate 06 is still absent at this point.\n']
+          for p in paths:
+            if not p.exists():raise SystemExit(f'MISSING {p}')
+            s=p.read_text();chunks.append(f'\n## {p.relative_to(root)}\n')
+            for k in keys:
+              hits=list(re.finditer(re.escape(k),s))
+              if hits:
+                chunks.append(f'\n### `{k}` — {len(hits)} hits\n')
+                for m in hits[:4]:chunks.append('```js\n'+s[max(0,m.start()-300):min(len(s),m.end()+600)]+'\n```\n')
+          out.write_text(''.join(chunks));print(out)
+          PY
+
+      - name: Apply and build City Transit Incidents Candidate 06
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_transit_incidents_patch.py "$ROOT"
+          cp scripts/cr_city_transit_incidents_contract.py "$ROOT/tests/pwa12_104_city_transit_incidents_contract.py"
+          cp scripts/cr_city_transit_incidents_browser.py "$ROOT/tests/pwa12_104_city_transit_incidents_browser.py"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-transit-incidents-candidate.06'
+          node --check src/world/transit-incidents-pwa12-104-city-candidate-06.js
+          node --check src/world/access-ecology-pwa12-104-city-candidate-05.js
+          node --check src/world/living-streets-v13-4a.js
+          node --check src/world/district-worlds-v13-3.js
+          node --check src/runtime/runtime-bundle.js
+          python3 tests/pwa12_104_city_transit_incidents_contract.py .
+
+      - name: Canonical and city regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ROOT"
+          python3 tests/pwa12_104_street_contact_support_contract.py
+          python3 tests/pwa12_103_district_control_context_contract.py
+          python3 tests/pwa12_100_district_control_effect_contract.py
+          python3 tests/pwa12_82_street_combat_contract.py
+          python3 tests/pwa12_83_street_aftermath_contract.py
+          python3 tests/pwa12_38_save_snapshot_atomicity_contract.py
+          python3 tests/pwa12_31_save_recovery_contract.py
+          python3 tests/pwa12_27_active_city_perf_contract.py
+          python3 tests/pwa12_19_route_marker_perf_contract.py
+          python3 tests/pwa11_manifest_contract.py
+          node tests/pwa11_service_worker.test.mjs
+          if [ -f tests/pwa12_79_city_aftermath_contract.mjs ]; then node tests/pwa12_79_city_aftermath_contract.mjs; fi
+
+      - name: Prepare Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          P=$(python3 -c "from playwright.sync_api import sync_playwright;p=sync_playwright().start();print(p.chromium.executable_path);p.stop()")
+          sudo ln -sf "$P" /usr/bin/chromium
+
+      - name: Candidate 06 browser integration and mobile QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ROOT"
+          python3 tests/pwa12_104_city_transit_incidents_browser.py .
+
+      - name: Cumulative city and city-combat browser regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ROOT"
+          python3 tests/pwa12_104_city_access_ecology_browser.py .
+          python3 tests/pwa12_104_city_multihop_logistics_browser.py .
+          python3 tests/pwa12_104_city_dynamic_disruptions_browser.py .
+          python3 tests/pwa12_104_city_interdistrict_logistics_browser.py .
+          python3 tests/pwa12_49_operation_routing_browser.py
+          python3 tests/pwa12_45_stage_consequences_browser.py
+
+      - name: Document and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_city_transit_incidents_note.py "$ROOT" "$GITHUB_WORKSPACE/out"
+          cd "$ROOT"
+          cp qa/pwa12-104-city-transit-incidents-mobile.png "$GITHUB_WORKSPACE/out/"
+          cp build-meta.json "$GITHUB_WORKSPACE/out/BUILD_META.json"
+          C='Chrome_Requiem_v14_PWA_pwa12_104_CITY_TRANSIT_INCIDENTS_CANDIDATE_06'
+          cd ..
+          mv "$(basename "$ROOT")" "$C"
+          zip -qr "$GITHUB_WORKSPACE/out/${C}_source.zip" "$C"
+          sha256sum "$GITHUB_WORKSPACE/out/${C}_source.zip" | tee "$GITHUB_WORKSPACE/out/SHA256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-PWA12-104-City-Transit-Incidents-Candidate-06
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
