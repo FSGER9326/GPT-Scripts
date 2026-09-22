@@ -48,17 +48,26 @@ with sync_playwright() as pw:
     assert committed['stats']['committed']>=1,committed
 
     assert page.evaluate('()=>saveGame(11,true)') is True
-    restored=page.evaluate('''()=>{Game.pendingPath=null;Game._v133TravelTarget=null;Game.livingStreetsV134.patrolRouting.activeRoute=null;const ok=loadGame(11);const saved=Game.livingStreetsV134?.patrolRouting?.activeRoute;showScreen('overworld-screen');initOverworldV133();return{ok,saved,player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y}}}''')
+    restored=page.evaluate('''()=>{Game.pendingPath=null;Game._v133TravelTarget=null;Game.livingStreetsV134.patrolRouting.activeRoute=null;const ok=loadGame(11),saved=Game.livingStreetsV134?.patrolRouting?.activeRoute,stats={...Game.livingStreetsV134?.patrolRouting?.stats};showScreen('overworld-screen');initOverworldV133();return{ok,saved,stats,player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y}}}''')
     assert restored['ok'] and restored['saved'] and restored['saved']['profile']==setup['pick'],restored
-    page.wait_for_function("()=>Game.pendingPath?.length>1&&Game.livingStreetsV134?.patrolRouting?.activeRoute",timeout=5000)
-    resumed=page.evaluate('''()=>({path:Game.pendingPath?.length||0,a:Game.livingStreetsV134.patrolRouting.activeRoute,stats:Game.livingStreetsV134.patrolRouting.stats,player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y}})''')
-    assert resumed['path']>1 and resumed['a']['profile']==setup['pick'] and resumed['stats']['resumed']>=1,resumed
+    # Canonical movement can consume a resumed path very quickly. Observe the durable resume
+    # counter instead of requiring the transient Game.pendingPath array to still be in flight.
+    page.wait_for_function("n=>Game.livingStreetsV134?.patrolRouting?.stats?.resumed>n",arg=restored['stats']['resumed'],timeout=5000)
+    resumed=page.evaluate('''()=>({path:Game.pendingPath?.length||0,a:Game.livingStreetsV134.patrolRouting.activeRoute,stats:{...Game.livingStreetsV134.patrolRouting.stats},player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y}})''')
+    assert resumed['stats']['resumed']>restored['stats']['resumed'],(restored,resumed)
+    if resumed['a']:
+        assert resumed['a']['profile']==setup['pick'],resumed
+    else:
+        assert resumed['stats']['completed']>restored['stats']['completed'],(restored,resumed)
 
-    # Prove this is physical movement, not route-state bookkeeping or teleportation.
-    sx,sy=resumed['player']['x'],resumed['player']['y']
-    page.wait_for_function(f"()=>Game.ovPlayer&&(Game.ovPlayer.x!={sx}||Game.ovPlayer.y!={sy})",timeout=10000)
-    moved=page.evaluate('''()=>({player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y},path:Game.pendingPath?.length||0,a:Game.livingStreetsV134.patrolRouting.activeRoute,exposureSteps:Game.livingStreetsV134.patrolRouting.stats.exposureSteps})''')
-    assert moved['player']!=resumed['player'],(resumed,moved)
+    # Prove resumption produced physical movement, not route-state bookkeeping or teleportation.
+    # If the canonical scheduler already completed the route before inspection, the restored
+    # start position still proves that the crew traversed away from the saved location.
+    if resumed['player']==restored['player']:
+        sx,sy=restored['player']['x'],restored['player']['y']
+        page.wait_for_function(f"()=>Game.ovPlayer&&(Game.ovPlayer.x!={sx}||Game.ovPlayer.y!={sy})",timeout=10000)
+    moved=page.evaluate('''()=>({player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y},path:Game.pendingPath?.length||0,a:Game.livingStreetsV134.patrolRouting.activeRoute,stats:{...Game.livingStreetsV134.patrolRouting.stats},exposureSteps:Game.livingStreetsV134.patrolRouting.stats.exposureSteps})''')
+    assert moved['player']!=restored['player'],(restored,resumed,moved)
 
     # A non-planner programmatic route still goes through canonical routeToLocationV133,
     # and therefore must supersede the persisted manual tactical route cleanly.
