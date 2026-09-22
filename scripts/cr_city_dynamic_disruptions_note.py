@@ -20,7 +20,7 @@ While the crew is physically walking the first leg of an accepted interdistrict 
 A disruption stops the current `Game.pendingPath` at the crew's actual street position. It does not teleport, auto-cross, or resolve in a menu. The player can:
 
 - **Reroute** to another already-valid transit option. The system calls the existing Candidate 02 physical transit routing, creates a new real path to that alternate transit node, and preserves the original absolute delivery deadline.
-- **Push through** the original crossing. The system recomputes the physical route from the crew's current position, preserves the original deadline, consumes the same 0.25-hour time quantum as a normal canonical street step, raises local heat, and increases the dispatch's route risk.
+- **Push through** the original crossing. The system recomputes the physical route from the crew's current position, preserves the original deadline, applies an explicit 15-minute delay through canonical `advanceTime(minutes)`, raises local heat, and increases the dispatch's route risk.
 
 Only one disruption can occur per dispatch. Alert/resolution data is stored inside the already-persisted active dispatch object under `Game.livingStreetsV134.districtDispatches`, so the save schema does not change. An unresolved disruption survives save/load and restores its mobile route-decision panel.
 
@@ -48,7 +48,7 @@ This note is generated only after all preceding workflow gates succeed:
 - Disruption pressure is sampled from the neighborhood the crew is physically moving through when the check fires; it is not a second independent city-event simulator.
 - The feature works with direct Candidate 02 district crossings. It does not yet build multi-hop journeys across several intermediate districts.
 - Rerouting preserves the original contract deadline rather than renegotiating payout or timing; the cost of changing plans is therefore the extra physical travel itself.
-- Pushing through adds a fixed canonical street-step time cost (15 minutes) plus state pressure. This is deliberately legible and deterministic once the disruption has occurred.
+- Pushing through adds a fixed 15-minute delay plus local heat and route-risk pressure. This is deliberately legible and deterministic once the disruption has occurred.
 
 ## Next city target
 Build **multi-hop city logistics with intermediate handoffs**: jobs that can require two district crossings and a physical mid-route handoff/safehouse, with the route planner exposing distinct sequences rather than only direct links. Dynamic disruptions should be able to invalidate a later leg and force a new physical sequence, while faction access, local heat/security and discovered hidden routes determine which chains remain viable.
