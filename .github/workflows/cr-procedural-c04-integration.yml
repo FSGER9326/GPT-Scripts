@@ -1,0 +1,58 @@
+name: CR Procedural Candidate 04 Integration
+
+on:
+  push:
+    branches: [agent/cr-procedural-c04-integration-20260922]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-integrate-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout tooling
+        uses: actions/checkout@v4
+
+      - name: Download Candidate 03 and Candidate 04 source delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads work out
+          curl -fL --retry 3 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-a1fc-820a-b68f-97270d5d88d1/raw?se=2026-09-22T01%3A23%3A02Z&sp=r&sv=2026-02-06&sr=b&scid=26c9758a-ea76-566c-baa7-40a6e078914f&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T00%3A06%3A08Z&ske=2026-09-23T00%3A06%3A08Z&sks=b&skv=2026-02-06&sig=GAilk7O/ZFIZ5bqC4ISWqR/F62q%2BRrZk25jxTXaunsw%3D' -o downloads/candidate03.zip
+          curl -fL --retry 3 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-19f4-820a-bb2f-06536682beb7/raw?se=2026-09-22T01%3A23%3A12Z&sp=r&sv=2026-02-06&sr=b&scid=4a88ffc8-b206-5783-ac70-794b222bdf6a&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A45%3A24Z&ske=2026-09-22T21%3A45%3A24Z&sks=b&skv=2026-02-06&sig=sMXwyd24v3x4aucb95CUUyvMPswK5GjvrMLu3dtBwBQ%3D' -o downloads/procedural-complications-v14.js
+          unzip -q downloads/candidate03.zip -d work
+          test -s downloads/procedural-complications-v14.js
+
+      - name: Inspect actual Candidate 03 source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '=== archive root ==='
+            find work -maxdepth 3 -type f | sort | head -300
+            echo '=== build meta candidates ==='
+            find work -name build-meta.json -type f -print -exec cat {} \;
+            echo '=== index candidates ==='
+            find work -name index.html -type f -print
+            echo '=== relevant source files ==='
+            find work -type f \( -name '*company-foundation*' -o -name '*contract-approaches*' -o -name '*variable-arenas*' -o -name '*multistage*' -o -name '*runtime-bundle*' -o -name 'build_pwa11.py' -o -name 'rebundle_runtime.py' \) -print | sort
+            echo '=== procedural symbols ==='
+            grep -RInE 'generatedContactContractV137|v138OptionalClause|v139RouteVariant|multiStageConflictV139|showMissionBriefingV135|applyApproachAlertV134B' work --include='*.js' --include='*.py' | head -300 || true
+            echo '=== procedural tests ==='
+            find work -type f | grep -Ei 'test.*(procedural|faction.*composition|optional.*clause|egress.*route)|procedural.*test|candidate0[123]' | sort | head -300 || true
+            echo '=== source module sanity ==='
+            wc -l -c downloads/procedural-complications-v14.js
+            head -8 downloads/procedural-complications-v14.js
+            node --check downloads/procedural-complications-v14.js
+          } | tee out/inspection.txt
+
+      - name: Upload inspection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: CR-Procedural-C04-Inspection
+          path: out/inspection.txt
+          if-no-files-found: error
+          retention-days: 7
