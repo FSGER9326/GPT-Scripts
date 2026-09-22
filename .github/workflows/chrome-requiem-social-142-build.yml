@@ -12,58 +12,9 @@ jobs:
         run: |
           curl --fail --location --retry 3 --output source138.zip "$(cat ci/source138_url.txt)"
           test "$(stat -c%s source138.zip)" -gt 80000000
-      - name: Prepare PWA12.142 candidate and integrate recovery bonds
-        run: |
-          python3 - <<'PY'
-          import zipfile,pathlib,shutil,re
-          z=zipfile.ZipFile('source138.zip'); names=z.namelist(); idx=next(n for n in names if n.endswith('/index.html')); oldroot=idx[:-len('index.html')]
-          tmp=pathlib.Path('extract'); z.extractall(tmp); src=tmp/oldroot
-          dst=pathlib.Path('Chrome_Requiem_v14_PWA_pwa12_142_RECOVERY_BONDS_CANDIDATE_01_source')
-          if dst.exists(): shutil.rmtree(dst)
-          shutil.copytree(src,dst)
-          js=pathlib.Path('ci/recovery-support-v14.js').read_text()
-          js=js.replace("renderRecoverySupportV14:renderSupport,runDiagnosticsRecoverySupportV14", "renderRecoverySupportV14:renderSupport,decorateRecoverySupportBriefingV14:decorateBriefing,runDiagnosticsRecoverySupportV14")
-          js=js.replace("add('mission exclusion hook',window.createCombatUnits===createCombatUnits)", "add('mission exclusion hook',typeof window.createCombatUnits==='function')")
-          js=js.replace("if(!(patient.injuries||[]).includes(a.injuryId))return h?.outcome||'treated_elsewhere';", "if(!(patient.injuries||[]).includes(a.injuryId)){if(h?.outcome)return h.outcome;return Number(Game.day||1)>=Number(a.dueDay||Infinity)?'recovered':'treated_elsewhere';}")
-          (dst/'src/company/recovery-support-v14.js').write_text(js)
-          css=pathlib.Path('ci/38-v14-recovery-bonds.css').read_text(); (dst/'src/styles/38-v14-recovery-bonds.css').write_text(css)
-          shutil.copy2('ci/pwa12_142_recovery_bonds_browser.py',dst/'tests/pwa12_142_recovery_bonds_browser.py')
-          p=dst/'src/bootstrap/module-manifest.js'; t=p.read_text(); lines=t.splitlines(); out=[]
-          for line in lines:
-              out.append(line)
-              if "'company.crewIntercession'" in line and 'path:' in line and 'company.recoverySupport' not in t:
-                  ind=line[:len(line)-len(line.lstrip())]; out.append(ind+"'company.recoverySupport':{path:'./src/company/recovery-support-v14.js',kind:'module'},")
-              elif line.strip()=="'company.crewIntercession'," and "'company.recoverySupport'," not in t:
-                  ind=line[:len(line)-len(line.lstrip())]; out.append(ind+"'company.recoverySupport',")
-          p.write_text('\n'.join(out)+'\n')
-          p=dst/'src/bootstrap/compatibility-manifest.js'; t=p.read_text()
-          if 'runDiagnosticsRecoverySupportV14' not in t:
-              lines=t.splitlines(); out=[]; inserted=False
-              for line in lines:
-                  out.append(line)
-                  if 'runDiagnosticsCrewIntercessionV14' in line:
-                      ind=line[:len(line)-len(line.lstrip())]; out.append(ind+"'runDiagnosticsRecoverySupportV14',"); inserted=True
-              if not inserted: raise SystemExit('compatibility insertion anchor missing')
-              p.write_text('\n'.join(out)+'\n')
-          p=dst/'tools/build_pwa11.py'; t=p.read_text(); lines=t.splitlines(); out=[]
-          for line in lines:
-              out.append(line)
-              if 'src/company/crew-intercession-v14.js' in line and 'recovery-support-v14.js' not in t:
-                  ind=line[:len(line)-len(line.lstrip())]; q='"' if '"' in line else "'"; out.append(ind+q+'src/company/recovery-support-v14.js'+q+',')
-              if 'src/styles/37-v14-crew-intercession.css' in line and '38-v14-recovery-bonds.css' not in t:
-                  ind=line[:len(line)-len(line.lstrip())]; q='"' if '"' in line else "'"; out.append(ind+q+'src/styles/38-v14-recovery-bonds.css'+q+',')
-          p.write_text('\n'.join(out)+'\n')
-          def insert_after(bp,old,new,text):
-              s=bp.read_text(); marker=f'/* SOURCE: {old} */'; pos=s.find(marker)
-              if pos<0: raise SystemExit('missing source marker '+marker)
-              start=pos+len(marker); m=re.search(r'/\* SOURCE: [^*]+ \*/',s[start:]); ins=start+(m.start() if m else len(s)-start)
-              if new not in s: s=s[:ins]+f'\n/* SOURCE: {new} */\n'+text.rstrip()+'\n\n'+s[ins:]
-              bp.write_text(s)
-          insert_after(dst/'src/runtime/runtime-bundle.js','src/company/crew-intercession-v14.js','src/company/recovery-support-v14.js',js)
-          insert_after(dst/'src/styles/styles-bundle.css','src/styles/37-v14-crew-intercession.css','src/styles/38-v14-recovery-bonds.css',css)
-          (dst/'PWA12_142_BASELINE.txt').write_text('Baseline: PWA12.138 Crew Intercession Rebase Candidate 01 QA Verified\nParent cumulative line: PWA12.136 Integration Release Candidate 01\nNew subsystem: Crew Recovery Bonds / recovery support\n')
-          PY
-      - name: Build candidate and syntax-check executable bundles
+      - name: Prepare PWA12.142 recovery-bonds candidate
+        run: python3 ci/build_recovery_bonds_candidate.py source138.zip Chrome_Requiem_v14_PWA_pwa12_142_RECOVERY_BONDS_CANDIDATE_01_source
+      - name: Build and syntax-check
         working-directory: Chrome_Requiem_v14_PWA_pwa12_142_RECOVERY_BONDS_CANDIDATE_01_source
         run: |
           mkdir -p qa
@@ -111,7 +62,8 @@ jobs:
           with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
               for p in root.rglob('*'):
                   if p.is_file(): z.write(p,arcname=str(root.name/pathlib.Path(p.relative_to(root))))
-          sha=hashlib.sha256(out.read_bytes()).hexdigest(); pathlib.Path('PWA12_142_SHA256.txt').write_text(f'{sha}  {out.name}\n')
+          sha=hashlib.sha256(out.read_bytes()).hexdigest()
+          pathlib.Path('PWA12_142_SHA256.txt').write_text(f'{sha}  {out.name}\n')
           print(out.name,out.stat().st_size,sha)
           PY
       - uses: actions/upload-artifact@v4
