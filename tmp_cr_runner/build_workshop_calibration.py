@@ -45,16 +45,13 @@ def write_sources():
     css_path.write_text((RUNNER/'workshop-calibration-v14.css').read_text(),encoding='utf-8')
 
 def patch_architecture():
-    # Runtime architecture manifest.
     p=CANDIDATE/'src/bootstrap/module-manifest.js'; s=p.read_text()
     s=replace_once(s,"  'company':{path:'./src/company/company-foundation-v13-5.js',kind:'module'},\n  'visuals':", "  'company':{path:'./src/company/company-foundation-v13-5.js',kind:'module'},\n  'progression.workshopCalibration':{path:'./src/progression/workshop-calibration-v14.js',kind:'module'},\n  'visuals':",'module manifest entry')
     s=replace_once(s,"'world.livingStreets','missions.approaches','company','visuals','runtime'", "'world.livingStreets','missions.approaches','company','progression.workshopCalibration','visuals','runtime'",'module order')
     p.write_text(s,encoding='utf-8')
-    # Compatibility manifest documents the intentionally supported global hook.
     p=CANDIDATE/'src/bootstrap/compatibility-manifest.js'; s=p.read_text()
     s=replace_once(s,"  runDiagnosticsV136:'v13.6 visual identity diagnostics',", "  runDiagnosticsV14Calibration:'v14 workshop calibration diagnostics',\n  WorkshopCalibrationV14:'v14 workshop calibration API',\n  runDiagnosticsV136:'v13.6 visual identity diagnostics',",'compat exports')
     p.write_text(s,encoding='utf-8')
-    # Aggregate diagnostics include the new system without weakening inherited checks.
     p=CANDIDATE/'src/bootstrap/bootstrap.js'; s=p.read_text()
     s=replace_once(s,"const names=['runDiagnosticsV136','runDiagnosticsV135'", "const names=['runDiagnosticsV14Calibration','runDiagnosticsV136','runDiagnosticsV135'",'diagnostic runner')
     p.write_text(s,encoding='utf-8')
@@ -64,11 +61,10 @@ def patch_bundle_policy():
     s=replace_once(s,"    'src/company/company-foundation-v13-5.js',\n", "    'src/company/company-foundation-v13-5.js',\n    'src/progression/workshop-calibration-v14.js',\n",'JS precache exclusion')
     s=replace_once(s,"    'src/styles/33-v14-pwa12-81-grounded-scene.css',\n", "    'src/styles/33-v14-pwa12-81-grounded-scene.css',\n    'src/styles/35-v14-pwa12-104-workshop-calibration.css',\n",'CSS precache exclusion')
     p.write_text(s,encoding='utf-8')
-    # Add ordered source markers, then rebuild from source with the canonical rebundler.
     p=CANDIDATE/'src/runtime/runtime-bundle.js'; s=p.read_text(); anchor='/* SOURCE: src/visuals/visual-identity-v13-6.js */'
     insert='/* SOURCE: src/progression/workshop-calibration-v14.js */\n'+(CANDIDATE/'src/progression/workshop-calibration-v14.js').read_text().rstrip()+'\n\n'
     s=replace_once(s,anchor,insert+anchor,'JS bundle insertion'); p.write_text(s,encoding='utf-8')
-    p=CANDIDATE/'src/styles/runtime-bundle.css'; s=p.read_text();
+    p=CANDIDATE/'src/styles/runtime-bundle.css'; s=p.read_text()
     if '/* SOURCE: src/styles/35-v14-pwa12-104-workshop-calibration.css */' in s: raise RuntimeError('CSS marker already present')
     s=s.rstrip()+"\n\n/* SOURCE: src/styles/35-v14-pwa12-104-workshop-calibration.css */\n"+(CANDIDATE/'src/styles/35-v14-pwa12-104-workshop-calibration.css').read_text().rstrip()+"\n"
     p.write_text(s,encoding='utf-8')
@@ -83,7 +79,7 @@ css=(ROOT/'src/styles/35-v14-pwa12-104-workshop-calibration.css').read_text()
 bundle=(ROOT/'src/runtime/runtime-bundle.js').read_text(); cbundle=(ROOT/'src/styles/runtime-bundle.css').read_text()
 manifest=(ROOT/'src/bootstrap/module-manifest.js').read_text(); compat=(ROOT/'src/bootstrap/compatibility-manifest.js').read_text(); boot=(ROOT/'src/bootstrap/bootstrap.js').read_text(); builder=(ROOT/'tools/build_pwa11.py').read_text(); meta=json.loads((ROOT/'build-meta.json').read_text())
 assert "weaponCalibrationV14" in js and "calibrationProfileV14" in js
-assert "hasOwnProperty.call(synthetic, 'calibrationProfileV14')" in js
+assert re.search(r"hasOwnProperty\.call\(synthetic,\s*['\"]calibrationProfileV14['\"]\)",js)
 assert "damage:2,range:-1,crit:-5" in js and "damage:-1,range:1,crit:6" in js
 assert "Game?.activeMission" in js and "advanceTime(q.minutes)" in js
 assert "timeProcessingFault=true" in js and "locked until reload" in js
