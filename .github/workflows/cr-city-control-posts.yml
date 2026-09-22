@@ -8,6 +8,7 @@ on:
       - 'scripts/cr_city_control_posts_patch.py'
       - 'scripts/cr_city_control_posts_patch_seam_fix.py'
       - 'scripts/cr_city_control_posts_ecology_clearance_fix.py'
+      - 'scripts/cr_city_control_posts_route_wakeup_fix.py'
       - 'scripts/cr_city_control_posts_contract.py'
       - 'scripts/cr_city_control_posts_browser.py'
       - 'scripts/cr_city_control_posts_browser_lifecycle_fix.py'
@@ -171,6 +172,7 @@ jobs:
           cp scripts/cr_city_control_posts_contract.py "$ROOT/tests/pwa12_104_city_control_posts_contract.py"
           cp scripts/cr_city_control_posts_browser.py "$ROOT/tests/pwa12_104_city_control_posts_browser.py"
           python3 scripts/cr_city_control_posts_browser_lifecycle_fix.py "$ROOT"
+          python3 scripts/cr_city_control_posts_route_wakeup_fix.py "$ROOT"
           cd "$ROOT"
           python3 tools/rebundle_runtime.py
           python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-control-posts-candidate.07'
@@ -187,9 +189,6 @@ jobs:
         run: |
           set -euo pipefail
           cd "$ROOT"
-          # Candidate 01-06 contracts are version/stage contracts and have already passed
-          # immediately after their owning stage above. Re-running them after later modules
-          # would test obsolete adjacency/version assumptions rather than product behavior.
           python3 tests/pwa12_104_street_contact_support_contract.py
           python3 tests/pwa12_103_district_control_context_contract.py
           python3 tests/pwa12_100_district_control_effect_contract.py
