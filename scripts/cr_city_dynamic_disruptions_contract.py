@@ -22,7 +22,7 @@ checks={
  'push uses existing physical transit routing':'chooseInterdistrictTransitV12104?.(link)' in mod,
  'reroute preserves deadline':'const deadline=a.deadline' in mod and 'a.deadline=deadline' in mod,
  'push preserves deadline':'const oldDeadline=a.deadline' in mod and 'a.deadline=oldDeadline' in mod,
- 'push costs canonical street time':"advanceTime(.25)" in mod,
+ 'push costs fifteen game minutes':"advanceTime(15)" in mod and "advanceTime(.25)" not in mod,
  'push changes local heat':'h.localHeat=clamp' in mod,
  'push changes route risk':'a.risk=Number(clamp' in mod,
  'no teleport district activation':'activateDistrictV133' not in mod,
