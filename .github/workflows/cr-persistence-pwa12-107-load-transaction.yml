@@ -1,0 +1,211 @@
+name: CR PWA12.107 Load Transaction Candidate
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cr-persistence-pwa12-107-load-transaction.yml'
+      - 'scripts/cr_pwa12_107_load_transaction_patch.py'
+      - 'scripts/cr_pwa12_107_load_transaction_contract.mjs'
+      - 'scripts/cr_pwa12_107_save_reload_migration_browser.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct and verify exact PWA12.104 canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work out
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          test -n "$INNER"
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          test -n "$ROOT"
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support'
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build-meta.json'))
+          assert m['version']=='14.0.0-pwa.12.104-street-contact-support',m
+          assert m['buildHash']=='4313da4acd4c324a7672c36e',m
+          assert m['schemaVersion']==14,m
+          src=open('src/runtime/persistence/index.js',encoding='utf-8').read()
+          assert "const DB_VERSION=2" in src
+          assert "const STORES=['saves','saveBackups','metadata','settings']" in src
+          print('VERIFIED_CANONICAL',m)
+          PY
+          cd "$GITHUB_WORKSPACE"
+          cp -a "$ROOT" baseline-pwa12-104
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+          echo "BASELINE_ROOT=$GITHUB_WORKSPACE/baseline-pwa12-104" >> "$GITHUB_ENV"
+
+      - name: Apply load transaction candidate and rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_pwa12_107_load_transaction_patch.py "$ROOT"
+          cp scripts/cr_pwa12_107_load_transaction_contract.mjs "$ROOT/tests/pwa12_107_load_transaction_contract.mjs"
+          cp scripts/cr_pwa12_107_save_reload_migration_browser.py "$ROOT/tests/pwa12_107_save_reload_migration_browser.py"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.107-load-transaction-candidate.01'
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build-meta.json'))
+          assert m['version']=='14.0.0-pwa.12.107-load-transaction-candidate.01',m
+          assert m['schemaVersion']==14,m
+          src=open('src/runtime/persistence/index.js',encoding='utf-8').read()
+          assert "const DB_VERSION=2" in src
+          assert "const STORES=['saves','saveBackups','metadata','settings']" in src
+          print('CANDIDATE_META',m)
+          PY
+          cp build-meta.json "$GITHUB_WORKSPACE/out/BUILD_META.json"
+
+      - name: Prepare Chromium QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          PLAYWRIGHT_CHROMIUM=$(python3 -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()")
+          sudo ln -sf "$PLAYWRIGHT_CHROMIUM" /usr/bin/chromium
+
+      - name: Focused transaction and inherited persistence regressions
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            node --check src/runtime/runtime-bundle.js
+            node tests/pwa12_107_load_transaction_contract.mjs .
+            python3 tests/pwa12_31_save_recovery_contract.py
+            python3 tests/pwa12_38_save_snapshot_atomicity_contract.py
+            node tests/pwa12_71_inflight_save_load_contract.mjs
+            python3 tests/pwa12_62_safe_load_menu_contract.py
+            python3 tests/pwa12_82_street_combat_contract.py
+            python3 tests/pwa12_83_street_aftermath_contract.py
+            python3 tests/pwa12_104_street_contact_support_contract.py
+            python3 tests/pwa11_manifest_contract.py
+            node tests/pwa11_service_worker.test.mjs
+          } 2>&1 | tee "$GITHUB_WORKSPACE/out/static-regression.log"
+
+      - name: New game save reload continue and migration browser QA
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/pwa12_107_save_reload_migration_browser.py . 2>&1 | tee "$GITHUB_WORKSPACE/out/focused-browser.log"
+
+      - name: Combat city and native IndexedDB transition regressions
+        working-directory: ${{ env.ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            python3 tests/pwa12_71_inflight_save_load_browser.py
+            python3 tests/pwa12_61_operation_checkpoint_browser.py
+            python3 tests/pwa12_79_city_aftermath_browser.py
+            python3 tests/pwa12_71_real_origin_indexeddb_browser.py
+          } 2>&1 | tee "$GITHUB_WORKSPACE/out/transition-browser.log"
+
+      - name: Controlled progressed-campaign comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          (cd "$BASELINE_ROOT" && python3 tests/pwa12_54_progressed_campaign_browser.py) > out/baseline-progressed-campaign.log 2>&1
+          BASE_RC=$?
+          (cd "$ROOT" && python3 tests/pwa12_54_progressed_campaign_browser.py) > out/candidate-progressed-campaign.log 2>&1
+          CAND_RC=$?
+          set -e
+          echo "baseline_rc=$BASE_RC candidate_rc=$CAND_RC" | tee out/progressed-campaign-control.log
+          cat out/baseline-progressed-campaign.log >> out/progressed-campaign-control.log
+          echo '--- candidate ---' >> out/progressed-campaign-control.log
+          cat out/candidate-progressed-campaign.log >> out/progressed-campaign-control.log
+          if [ "$BASE_RC" -eq 0 ] && [ "$CAND_RC" -ne 0 ]; then
+            echo 'REGRESSION: candidate fails a persistence test that canonical passes' >&2
+            exit 1
+          fi
+          if [ "$BASE_RC" -ne 0 ]; then
+            [ "$CAND_RC" -ne 0 ] || { echo 'candidate unexpectedly changes baseline fixture behavior'; exit 1; }
+            BASE_MSG=$(grep -F 'durable save/load mismatches:' out/baseline-progressed-campaign.log | tail -n1 || true)
+            CAND_MSG=$(grep -F 'durable save/load mismatches:' out/candidate-progressed-campaign.log | tail -n1 || true)
+            [ -n "$BASE_MSG" ] && [ "$BASE_MSG" = "$CAND_MSG" ] || { echo 'baseline/candidate persistence failures differ' >&2; exit 1; }
+            echo "CONTROLLED PRE-EXISTING FIXTURE FAILURE: $BASE_MSG" | tee -a out/progressed-campaign-control.log
+          else
+            echo 'PASS canonical and candidate progressed-campaign persistence control' | tee -a out/progressed-campaign-control.log
+          fi
+
+      - name: Package candidate and exact development report
+        shell: bash
+        run: |
+          set -euo pipefail
+          META=$(cat "$ROOT/build-meta.json")
+          CONTROL=$(tail -n1 out/progressed-campaign-control.log)
+          cat > "$ROOT/DEVELOPMENT_NOTE_PWA12_107_LOAD_TRANSACTION_CANDIDATE_01.md" <<EOF
+          # Chrome Requiem PWA12.107 Load Transaction Candidate 01
+
+          ## Baseline
+          Reconstructed and build-hash verified against the explicit canonical `14.0.0-pwa.12.104-street-contact-support` / `4313da4acd4c324a7672c36e` before editing. Canonical was not modified.
+
+          ## Concrete reliability improvement
+          The v14 legacy save bridge now owns an exclusive Load transaction barrier. Explicit Load requests serialize through one queue; ordinary save/autosave calls racing a queued Load fail closed instead of changing the selected slot underneath it. Compatibility migration/checkpoint autosaves requested *inside* legacy hydration are quarantined as exact call-boundary payloads. They are committed only after the legacy loader returns success. On a false return or exception, every quarantined save is discarded and the pre-load `chrome_requiem_v13_<slot>` compatibility mirror is restored byte-for-byte.
+
+          `flush()` now waits for the load queue before the persistence queue, so lifecycle/pagehide flushing cannot miss autosaves that are created at successful load-commit time. Boot/import hydration waits for live Load transactions before rewriting compatibility mirrors.
+
+          ## Schema / storage impact
+          - Save envelope schema: **14 unchanged**.
+          - IndexedDB database version: **2 unchanged**.
+          - IndexedDB stores: **saves, saveBackups, metadata, settings unchanged**.
+          - No new localStorage keys and no serializer fields.
+          - Existing primary/backup checksum validation and legacy migration format are unchanged.
+          - Migration behavior: old saves still migrate through the existing migration layer; this candidate changes only ordering/commit semantics during hydration.
+
+          ## Tests actually run by this workflow
+          Static/deterministic: runtime bundle syntax; new PWA12.107 transaction contract; PWA12.31 corrupt-primary/backup recovery contract; PWA12.38 synchronous snapshot atomicity; PWA12.71 delayed-write/load atomicity; PWA12.62 safe load-menu routing; PWA12.82 Street Combat contract; PWA12.83 Street aftermath contract; PWA12.104 Street Contact Support contract; manifest and service-worker checks.
+
+          Chromium: new-game -> save -> reload -> continue; immediate save -> load; real legacy-key migration to schema 14; inherited in-flight save/load; multistage operation checkpoint restart; district aftermath; and native-origin IndexedDB save A/save B/corrupt primary/restore backup/fresh-document repaired load.
+
+          Progressed-campaign control: $CONTROL. Full logs are packaged alongside this note.
+
+          ## Runtime-only state boundary / unresolved risk
+          This candidate prevents a failed legacy hydration from becoming *durable*, but it intentionally does not claim exact in-memory rollback after an arbitrary late loader exception. Tactical grids, DOM-backed cell objects, and multistage operation ownership contain runtime-only state that is not fully represented by the durable serializer. If a structurally valid payload throws after mutating live runtime objects, stored progress and the compatibility mirror remain protected, but the current page may still require a clean reload before play continues.
+
+          ## Next persistence target
+          Add explicit runtime transaction snapshots/rollback hooks for `Game` plus multistage/combat ownership, with UI rebind/re-render recovery, so late hydration exceptions restore the exact pre-load live session rather than protecting only durable state.
+
+          ## Build meta
+          \`\`\`json
+          $META
+          \`\`\`
+          EOF
+          cp "$ROOT/DEVELOPMENT_NOTE_PWA12_107_LOAD_TRANSACTION_CANDIDATE_01.md" out/
+          CANDIDATE='Chrome_Requiem_v14_PWA_pwa12_107_LOAD_TRANSACTION_CANDIDATE_01'
+          mv "$ROOT" "$GITHUB_WORKSPACE/work/$CANDIDATE"
+          cd "$GITHUB_WORKSPACE/work"
+          zip -qr "$GITHUB_WORKSPACE/out/${CANDIDATE}_source.zip" "$CANDIDATE"
+          cd "$GITHUB_WORKSPACE"
+          sha256sum "out/${CANDIDATE}_source.zip" | tee out/SHA256.txt
+
+      - name: Upload candidate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Requiem-PWA12-107-Load-Transaction-Candidate-01
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
