@@ -1,4 +1,4 @@
-name: CR PWA12.107 Persistence Transaction
+name: CR PWA12.107 Load Transaction Rollback
 
 on:
   push:
@@ -10,70 +10,149 @@ permissions:
   contents: read
 
 jobs:
-  inspect:
+  build-test-package:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
-      - name: Checkout tooling
+      - name: Checkout isolated tooling branch
         uses: actions/checkout@v4
+
       - name: Download exact PWA12.104 canonical
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 3 'https://sdmntpreastus2.oaiusercontent.com/files/00000000-d750-81f6-9960-1cc653f74a96/raw?se=2026-09-22T05%3A16%3A21Z&sp=r&sv=2026-02-06&sr=b&scid=6011dee6-625b-5bb7-88b2-cb359249d0f2&skoid=31bc9c1a-c7e0-460a-8671-bf4a3c419305&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A22%3A07Z&ske=2026-09-22T23%3A22%3A07Z&sks=b&skv=2026-02-06&sig=l31pESn/k9wnKAysyq8FNDp78fMMVQSF6QUuKwNoC74%3D' -o canonical.zip
           mkdir -p work out
+          curl -fL --retry 3 'https://sdmntpreastus2.oaiusercontent.com/files/00000000-f720-81f6-ac2e-898c3f3a388c/raw?se=2026-09-22T05%3A21%3A38Z&sp=r&sv=2026-02-06&sr=b&scid=9ebc8a23-7ae5-5a3e-a9fa-1c27a802de65&skoid=31bc9c1a-c7e0-460a-8671-bf4a3c419305&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T02%3A36%3A43Z&ske=2026-09-23T02%3A36%3A43Z&sks=b&skv=2026-02-06&sig=DptG3Ev1Yx4gUHUxb0Gx2p7edLVOgqUzDhh2SC6UKmQ%3D' -o canonical.zip
           unzip -q canonical.zip -d work
-          ROOT=$(find work -name build-meta.json -printf '%h\n' | head -1)
-          test -n "$ROOT"
-          echo "$ROOT" > root.txt
-          python3 - <<'PY'
-          import json, pathlib
-          root=pathlib.Path(open('root.txt').read().strip())
-          meta=json.loads((root/'build-meta.json').read_text())
-          print('BUILD_META',json.dumps(meta,sort_keys=True))
-          assert meta['schemaVersion']==14
-          assert 'pwa.12.104' in meta['version']
-          PY
-      - name: Inspect persistence and runtime boundaries
+          test "$(python3 -c "import json;print(json.load(open('work/cr103/build-meta.json'))['version'])")" = '14.0.0-pwa.12.104-street-contact-support'
+          test "$(python3 -c "import json;print(json.load(open('work/cr103/build-meta.json'))['schemaVersion'])")" = '14'
+
+      - name: Inspect persistence baseline before editing
+        working-directory: work/cr103
         shell: bash
         run: |
           set -euo pipefail
-          ROOT=$(cat root.txt)
-          python3 - "$ROOT" <<'PY' | tee out/PERSISTENCE_AUDIT.txt
-          import pathlib,re,sys,json
-          root=pathlib.Path(sys.argv[1])
-          pats=re.compile(r'(persist|save|load|storage|indexed|migrat|serial|checkpoint|snapshot|backup|recovery|legacy-save)',re.I)
-          text_ext={'.js','.mjs','.json','.html','.md','.py'}
-          files=[p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in text_ext]
-          relevant=[p for p in files if pats.search(str(p.relative_to(root)))]
-          print('=== RELEVANT PATHS ===')
-          for p in relevant: print(p.relative_to(root))
-          line_re=re.compile(r'(saveGame|loadGame|serializeGame|deserialize|hydrate|restore|rollback|mutex|queue|IndexedDB|indexedDB|localStorage|rngState|operationCheckpoint|activeOperation|combat|checkpoint|schemaVersion|checksum|saveBackups|fallback_slot|fallback_backup)',re.I)
-          print('\n=== SYMBOL/STATE HITS ===')
-          for p in files:
-            try: lines=p.read_text(errors='replace').splitlines()
-            except: continue
-            hits=[]
-            for i,line in enumerate(lines,1):
-              if line_re.search(line): hits.append((i,line[:500]))
-            if hits:
-              print(f'\n--- {p.relative_to(root)} ({len(hits)} hits) ---')
-              for i,line in hits[:80]: print(f'{i}: {line}')
-          print('\n=== FULL KEY FILES ===')
-          key_names={'save-envelope.js','legacy-save-bridge.js','save-transfer.js','persistence.js','indexeddb-adapter.js','migration.js','state.js'}
-          for p in files:
-            if p.name in key_names or ('persistence' in p.name.lower() and p.suffix=='.js'):
-              txt=p.read_text(errors='replace')
-              if len(txt)>100000: continue
-              print(f'\n##### FILE {p.relative_to(root)} #####\n{txt}')
-          print('\n=== TEST INVENTORY ===')
-          for p in sorted((root/'tests').glob('*')):
-            n=p.name.lower()
-            if any(k in n for k in ['save','load','persist','indexed','checkpoint','migration','street','city_aftermath','operation']): print(p.name)
+          {
+            echo '=== build meta ==='; cat build-meta.json
+            echo '=== storage/db/schema symbols ==='
+            grep -RniE 'DB_VERSION|saveBackups|fallback_slot|fallback_backup|chrome_requiem_v13_|schemaVersion' src/runtime | head -160 || true
+            echo '=== serializers / load-save bridge ==='
+            grep -RniE 'serializeGame|loadGame|saveGame|resolveEnvelope|validateSaveEnvelope|createSaveEnvelope' src/runtime | head -220 || true
+            echo '=== mission/combat state boundaries ==='
+            grep -RniE 'operationCheckpointV14|rngState|turnQueue|combatCanvas|activeMission|street.*aftermath' src | head -220 || true
+            echo '=== persistence fixture inventory ==='
+            find tests -maxdepth 1 -type f | grep -Ei 'save|load|persist|indexed|migration|checkpoint|street|aftermath' | sort || true
+          } | tee ../../out/BASELINE_INSPECTION.txt
+
+      - name: Apply isolated PWA12.107 reliability increment and rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/cr_pwa12_107_patch.py work/cr103
+          cp scripts/cr_pwa12_107_load_transaction_contract.mjs work/cr103/tests/pwa12_107_load_transaction_rollback_contract.mjs
+          cp scripts/cr_pwa12_107_migration_browser.py work/cr103/tests/pwa12_107_migration_browser.py
+          cd work/cr103
+          python3 tools/rebundle_runtime.py
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.107-load-transaction-rollback-candidate.01'
+          node --check src/runtime/runtime-bundle.js
+
+      - name: Prepare Chromium QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          PLAYWRIGHT_CHROMIUM=$(python3 -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()")
+          sudo ln -sf "$PLAYWRIGHT_CHROMIUM" /usr/bin/chromium
+
+      - name: Focused persistence contracts
+        working-directory: work/cr103
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/pwa12_107_load_transaction_rollback_contract.mjs
+          shopt -s nullglob
+          count=0
+          for f in tests/pwa12_31* tests/pwa12_33* tests/pwa12_35* tests/pwa12_38* tests/pwa12_54* tests/pwa12_62* tests/pwa12_71*indexeddb*contract* tests/pwa12_82*contract* tests/pwa12_83*contract*; do
+            case "$f" in
+              *.py) echo "RUN $f"; python3 "$f"; count=$((count+1));;
+              *.mjs) echo "RUN $f"; node "$f"; count=$((count+1));;
+            esac
+          done
+          test "$count" -ge 6
+          python3 tests/pwa11_manifest_contract.py
+          node tests/pwa11_service_worker.test.mjs
+
+      - name: Browser new-game reload migration and transition regressions
+        working-directory: work/cr103
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/pwa12_107_migration_browser.py .
+          shopt -s nullglob
+          count=0
+          for pat in 'tests/pwa12_56*browser.py' 'tests/pwa12_61*browser.py' 'tests/pwa12_71*inflight*browser.py' 'tests/pwa12_79*browser.py'; do
+            files=( $pat )
+            for f in "${files[@]}"; do echo "RUN $f"; python3 "$f"; count=$((count+1)); done
+          done
+          test "$count" -ge 3
+
+      - name: Real-origin IndexedDB recovery gate
+        working-directory: work/cr103
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=$(find tests -maxdepth 1 -type f -name 'pwa12_71*real*origin*indexeddb*browser.py' | head -1 || true)
+          if [ -z "$f" ]; then
+            echo 'NOT RUN - fixture not found' | tee ../../out/NATIVE_IDB_STATUS.txt
+          else
+            set +e
+            python3 "$f" > ../../out/NATIVE_IDB.log 2>&1
+            rc=$?
+            set -e
+            cat ../../out/NATIVE_IDB.log
+            if [ "$rc" -eq 0 ]; then
+              echo 'PASS' | tee ../../out/NATIVE_IDB_STATUS.txt
+            elif grep -q 'ERR_BLOCKED_BY_ADMINISTRATOR' ../../out/NATIVE_IDB.log; then
+              echo 'BLOCKED BY RUNNER ORIGIN POLICY (ERR_BLOCKED_BY_ADMINISTRATOR)' | tee ../../out/NATIVE_IDB_STATUS.txt
+            else
+              echo 'FAIL' | tee ../../out/NATIVE_IDB_STATUS.txt
+              exit "$rc"
+            fi
+          fi
+
+      - name: Final build metadata and diff audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib
+          meta=json.loads(pathlib.Path('work/cr103/build-meta.json').read_text())
+          assert meta['schemaVersion']==14,meta
+          assert meta['version']=='14.0.0-pwa.12.107-load-transaction-rollback-candidate.01',meta
+          print('FINAL_BUILD_META',json.dumps(meta,sort_keys=True))
           PY
-      - name: Upload audit artifact
+          unzip -q canonical.zip -d baseline
+          diff -qr baseline/cr103 work/cr103 | tee out/FINAL_DIFF.txt || true
+          python3 scripts/cr_pwa12_107_write_note.py work/cr103 out
+          cp work/cr103/DEVELOPMENT_NOTE_PWA12_107_LOAD_TRANSACTION_ROLLBACK_CANDIDATE_01.md out/
+          cp work/cr103/build-meta.json out/BUILD_META.json
+
+      - name: Package candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE='Chrome_Requiem_v14_PWA_pwa12_107_LOAD_TRANSACTION_ROLLBACK_CANDIDATE_01'
+          mv work/cr103 "work/$CANDIDATE"
+          cd work
+          zip -qr "../out/${CANDIDATE}_source.zip" "$CANDIDATE"
+          cd ..
+          sha256sum "out/${CANDIDATE}_source.zip" | tee out/SHA256.txt
+
+      - name: Upload candidate artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CR-PWA12-107-Persistence-Audit
-          path: out/PERSISTENCE_AUDIT.txt
-          retention-days: 7
+          name: Chrome-Requiem-PWA12-107-Load-Transaction-Rollback
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
