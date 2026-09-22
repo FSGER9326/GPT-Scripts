@@ -39,15 +39,15 @@ jobs:
           print('VERIFIED EXACT CANONICAL',m)
           PY
           echo "ROOT=$PWD" >> "$GITHUB_ENV"
-      - name: Inspect bundler source-order seams
+      - name: Inspect routing and overworld initialization seams
         shell: bash
         run: |
           set -euo pipefail
-          echo '===== tools/rebundle_runtime.py ====='
-          sed -n '1,260p' "$ROOT/tools/rebundle_runtime.py"
-          echo '===== module manifest relevant lines ====='
-          grep -n -C 4 -E 'world\.livingStreets|missions\.approaches|MODULE|ORDER|ordered' "$ROOT/src/bootstrap/module-manifest.js" || true
-          echo '===== other source order references ====='
-          grep -R -n -E "living-streets-v13-4a|world\.livingStreets|runtime-bundle\.js|ordered sources|SOURCE_ORDER|JS_SOURCES|sourceOrder" "$ROOT/tools" "$ROOT/src" --exclude='runtime-bundle.js' --exclude='runtime-bundle.css' | head -n 400 || true
-          echo '===== likely bundle/config files ====='
-          find "$ROOT" -maxdepth 4 -type f \( -iname '*bundle*' -o -iname '*manifest*' -o -iname '*order*' -o -iname '*source*' \) | sort | head -n 300
+          echo '===== routeToPoint / routeToLocation ====='
+          grep -n -C 12 -E 'function routeToPointV133|function routeToLocationV133' "$ROOT/src/world/district-worlds-v13-3.js" || true
+          echo '===== camera creation / init overworld ====='
+          grep -n -C 12 -E 'Game\.camera|function initOverworldV133|initOverworldV133=' "$ROOT/src/world/district-worlds-v13-3.js" | head -n 280 || true
+          echo '===== existing routing browser regression ====='
+          sed -n '1,260p' "$ROOT/tests/pwa12_49_operation_routing_browser.py"
+          echo '===== stage consequences browser setup ====='
+          sed -n '1,140p' "$ROOT/tests/pwa12_45_stage_consequences_browser.py"
