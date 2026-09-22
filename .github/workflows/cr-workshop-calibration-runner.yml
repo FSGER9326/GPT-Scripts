@@ -26,12 +26,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          CANDIDATE="$GITHUB_WORKSPACE/prior/cr_build/Chrome_Requiem_v14_PWA_pwa12_104_WORKSHOP_CALIBRATION_CANDIDATE_02_source"
+          export CANDIDATE="$GITHUB_WORKSPACE/prior/cr_build/Chrome_Requiem_v14_PWA_pwa12_104_WORKSHOP_CALIBRATION_CANDIDATE_02_source"
           echo "CANDIDATE=$CANDIDATE" >> "$GITHUB_ENV"
           python - <<'PY'
           from pathlib import Path
           import os
-          p=Path(os.environ.get('CANDIDATE','prior/cr_build/Chrome_Requiem_v14_PWA_pwa12_104_WORKSHOP_CALIBRATION_CANDIDATE_02_source'))/'tests/pwa12_104_workshop_calibration_contract.py'
+          p=Path(os.environ['CANDIDATE'])/'tests/pwa12_104_workshop_calibration_contract.py'
           s=p.read_text()
           old='assert "hasOwnProperty.call(synthetic, \'calibrationProfileV14\')" in js'
           new='assert re.search(r"hasOwnProperty\\.call\\(synthetic,\\s*[\\\'\\\"]calibrationProfileV14[\\\'\\\"]\\)",js)'
@@ -45,7 +45,7 @@ jobs:
           (cd "$CANDIDATE" && python tests/pwa12_39_js_bundle_perf_contract.py)
           (cd "$CANDIDATE" && python tests/pwa12_37_css_bundle_perf_contract.py)
           python - <<'PY'
-          import json,os,hashlib
+          import json,os
           from pathlib import Path
           root=Path(os.environ['CANDIDATE'])
           meta=json.loads((root/'build-meta.json').read_text())
@@ -68,7 +68,7 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/ >/dev/null && break; sleep 1; done
           python tmp_cr_runner/browser_workshop_calibration.py "$CANDIDATE" | tee cr-browser.log
           python - <<'PY' | tee cr-inherited-diagnostics.log
-          import os,json
+          import json
           from playwright.sync_api import sync_playwright
           with sync_playwright() as p:
             b=p.chromium.launch(headless=True); pg=b.new_page(viewport={'width':1280,'height':800})
