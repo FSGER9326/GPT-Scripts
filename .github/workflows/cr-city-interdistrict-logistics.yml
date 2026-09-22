@@ -8,6 +8,7 @@ on:
       - 'scripts/cr_city_interdistrict_logistics_ui_preserve.py'
       - 'scripts/cr_city_interdistrict_logistics_contract.py'
       - 'scripts/cr_city_interdistrict_logistics_browser.py'
+      - 'scripts/cr_city_dispatches_cumulative_contract.py'
       - 'scripts/cr_city_interdistrict_logistics_note.py'
   workflow_dispatch:
 
@@ -48,8 +49,9 @@ jobs:
           python3 scripts/cr_city_dispatches_patch.py "$ROOT"
           python3 scripts/cr_city_interdistrict_logistics_patch.py "$ROOT"
           python3 scripts/cr_city_interdistrict_logistics_ui_preserve.py "$ROOT"
-          cp scripts/cr_city_dispatches_contract.py "$ROOT/tests/pwa12_104_city_dispatches_contract.py"
+          cp scripts/cr_city_dispatches_cumulative_contract.py "$ROOT/tests/pwa12_104_city_dispatches_cumulative_contract.py"
           cp scripts/cr_city_interdistrict_logistics_contract.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_contract.py"
+          cp scripts/cr_city_dispatches_browser.py "$ROOT/tests/pwa12_104_city_dispatches_browser.py"
           cp scripts/cr_city_interdistrict_logistics_browser.py "$ROOT/tests/pwa12_104_city_interdistrict_logistics_browser.py"
           cd "$ROOT"
           python3 tools/rebundle_runtime.py
@@ -63,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$ROOT"
-          python3 tests/pwa12_104_city_dispatches_contract.py .
+          python3 tests/pwa12_104_city_dispatches_cumulative_contract.py .
           python3 tests/pwa12_104_city_interdistrict_logistics_contract.py .
           python3 tests/pwa12_104_street_contact_support_contract.py
           python3 tests/pwa12_103_district_control_context_contract.py
@@ -87,6 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$ROOT"
+          python3 tests/pwa12_104_city_dispatches_browser.py .
           python3 tests/pwa12_104_city_interdistrict_logistics_browser.py .
           python3 tests/pwa12_49_operation_routing_browser.py
           python3 tests/pwa12_45_stage_consequences_browser.py
