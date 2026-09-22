@@ -1,0 +1,56 @@
+name: Chrome Requiem Social Inspect
+on:
+  push:
+    branches: [agent/chrome-requiem-social-20260922]
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact PWA12.136 source
+        env:
+          SOURCE_URL: 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-1e5c-81f4-9870-4cfbc77c9419/raw?se=2026-09-22T02%3A53%3A36Z&sp=r&sv=2026-02-06&sr=b&scid=dca82b9d-61b1-505d-95fc-0335dec3e1a0&skoid=b32d65cd-c8f1-46fb-90df-c208671889d4&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T00%3A02%3A50Z&ske=2026-09-23T00%3A02%3A50Z&sks=b&skv=2026-02-06&sig=O/vTzWzV4z1/ibf3xRffh0FglASFJZU/S9BKEq6Ln3s%3D'
+        run: |
+          curl --fail --location --retry 3 --output source.zip "$SOURCE_URL"
+          test "$(stat -c%s source.zip)" -gt 80000000
+      - name: Inspect exact social-system source
+        run: |
+          python3 - <<'PY'
+          import zipfile, pathlib, re, json
+          z=zipfile.ZipFile('source.zip')
+          names=z.namelist()
+          idx=next(n for n in names if n.endswith('/index.html'))
+          root=idx[:-len('index.html')]
+          out=pathlib.Path('inspection'); out.mkdir()
+          wanted=[
+            'build-meta.json','src/company/recovery-network-v14.js','src/company/squad-conscience-v14.js',
+            'src/company/company-foundation-v13-5.js','src/company/squad-contacts-v14.js',
+            'src/missions/contract-approaches-v13-4b.js','src/legacy/city-life-v13.js',
+            'src/bootstrap/module-manifest.js','src/bootstrap/compatibility-manifest.js','tools/build_pwa11.py'
+          ]
+          report=[]
+          for rel in wanted:
+            p=root+rel
+            if p not in names:
+              report.append(f'MISSING {rel}')
+              continue
+            text=z.read(p).decode('utf-8','replace')
+            (out/rel.replace('/','__')).write_text(text)
+            globals_=sorted(set(re.findall(r'window\.([A-Za-z0-9_$]+)',text)))
+            funcs=sorted(set(re.findall(r'function\s+([A-Za-z0-9_$]+)\s*\(',text)))
+            report += [f'## {rel}',f'lines={len(text.splitlines())}',f'window globals={globals_}',f'functions={funcs}']
+            for i,line in enumerate(text.splitlines(),1):
+              if re.search(r'(recovery|conval|reserve|activeCrew|deployable|seriousInjury|loyal|trust|contact|mission|saveGame|advanceTime|companyV135)',line,re.I):
+                report.append(f'{i}: {line[:500]}')
+          meta=json.loads(z.read(root+'build-meta.json'))
+          report.insert(0,'# Exact PWA12.136 social-system inspection')
+          report.insert(1,f'root={root}')
+          report.insert(2,f'meta={meta}')
+          pathlib.Path('inspection/audit.md').write_text('\n'.join(report))
+          print('\n'.join(report[:900]))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pwa12-136-social-inspection
+          path: inspection
+          retention-days: 2
