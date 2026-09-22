@@ -6,8 +6,10 @@ on:
     paths:
       - '.github/workflows/cr-city-multihop-logistics.yml'
       - 'scripts/cr_city_multihop_logistics_patch.py'
+      - 'scripts/cr_city_multihop_ui_entry_fix.py'
       - 'scripts/cr_city_multihop_logistics_contract.py'
       - 'scripts/cr_city_multihop_logistics_browser.py'
+      - 'scripts/cr_city_multihop_browser_entry_patch.py'
       - 'scripts/cr_city_multihop_logistics_note.py'
   workflow_dispatch:
 
@@ -79,8 +81,10 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/cr_city_multihop_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_multihop_ui_entry_fix.py "$ROOT"
           cp scripts/cr_city_multihop_logistics_contract.py "$ROOT/tests/pwa12_104_city_multihop_logistics_contract.py"
           cp scripts/cr_city_multihop_logistics_browser.py "$ROOT/tests/pwa12_104_city_multihop_logistics_browser.py"
+          python3 scripts/cr_city_multihop_browser_entry_patch.py "$ROOT"
           cd "$ROOT"
           python3 tools/rebundle_runtime.py
           python3 tools/build_pwa11.py '14.0.0-pwa.12.104-city-multihop-logistics-candidate.04'
