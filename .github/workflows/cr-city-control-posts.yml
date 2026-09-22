@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/cr-city-control-posts.yml'
       - 'scripts/cr_city_control_posts_patch.py'
+      - 'scripts/cr_city_control_posts_patch_seam_fix.py'
       - 'scripts/cr_city_control_posts_ecology_clearance_fix.py'
       - 'scripts/cr_city_control_posts_contract.py'
       - 'scripts/cr_city_control_posts_browser.py'
@@ -163,6 +164,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 scripts/cr_city_control_posts_patch_seam_fix.py scripts/cr_city_control_posts_patch.py
           python3 scripts/cr_city_control_posts_patch.py "$ROOT"
           python3 scripts/cr_city_control_posts_ecology_clearance_fix.py "$ROOT"
           cp scripts/cr_city_control_posts_contract.py "$ROOT/tests/pwa12_104_city_control_posts_contract.py"
