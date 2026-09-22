@@ -1,0 +1,26 @@
+from pathlib import Path
+import mimetypes,sys
+from playwright.sync_api import sync_playwright
+ROOT=Path(sys.argv[1]).resolve()
+HTML=(ROOT/'index.html').read_text(encoding='utf-8').replace('bootChromeRequiemV14({registerPwa:true})','bootChromeRequiemV14({registerPwa:false})')
+SHIM="""<script>const __s=new Map();const __ls={getItem:k=>__s.has(String(k))?__s.get(String(k)):null,setItem:(k,v)=>__s.set(String(k),String(v)),removeItem:k=>__s.delete(String(k)),clear:()=>__s.clear(),key:i=>[...__s.keys()][i]??null,get length(){return __s.size}};Object.defineProperty(window,'localStorage',{value:__ls,configurable:true});Object.defineProperty(window,'sessionStorage',{value:__ls,configurable:true});</script>"""
+with sync_playwright() as pw:
+    b=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage']);c=b.new_context(viewport={'width':390,'height':844})
+    def route(r):
+        rel=r.request.url.split('http://cr.local/',1)[-1].split('?',1)[0] or 'index.html';p=ROOT/rel
+        r.fulfill(status=200,body=p.read_bytes(),content_type=mimetypes.guess_type(p.name)[0] or 'application/octet-stream') if p.is_file() else r.fulfill(status=404,body=b'not found')
+    c.route('http://cr.local/**',route);p=c.new_page();p.set_content(HTML.replace('<head>','<head><base href="http://cr.local/">'+SHIM,1),wait_until='domcontentloaded');p.wait_for_function('()=>!!window.ChromeRequiemV14Boot?.ready',timeout=45000)
+    setup=p.evaluate('''()=>{startNewGame('Probe','Hacker','street');document.getElementById('story-modal')?.classList.remove('open');activateDistrictV133('old_market');showScreen('overworld-screen');initOverworldV133();const w=currentDistrictV133(),s=ensureLivingStreetsStateV134();s.lastEventStep=s.stepCount+999999;const ns=ensureNeighborhoodStateV134(w);for(const n of w.neighborhoods)Object.assign(ns[n.id],{localHeat:0,security:1,gangPressure:1,unrest:0,controller:'local'});const ranked=[...w.neighborhoods].sort((a,b)=>Math.hypot(a.x-w.w/2,a.y-w.h/2)-Math.hypot(b.x-w.w/2,b.y-w.h/2));if(ranked[0])Object.assign(ns[ranked[0].id],{localHeat:100,security:5,gangPressure:1,unrest:1});if(ranked[1])Object.assign(ns[ranked[1].id],{localHeat:20,security:2,gangPressure:5,unrest:5});const pts=Object.values(w.locations).map(q=>({x:q.x,y:q.y}));let pick=null;for(const a of pts)for(const g of pts){if(Math.hypot(a.x-g.x,a.y-g.y)<28)continue;Game.ovPlayer={x:a.x,y:a.y};const plan=planPatrolRoutesV12104(g,{kind:'point',label:'PROBE'});if(plan?.plans?.low?.path?.length>4){pick={a,g,profile:'low'};break}if(pick)break}if(!pick)throw new Error('no probe route');Game.ovPlayer={x:pick.a.x,y:pick.a.y};Game.districtWorldsV133.positions[w.id]={x:pick.a.x,y:pick.a.y};openPatrolRoutePlannerV12104(pick.g,{kind:'point',label:'PROBE'});const ok=commitPatrolRouteV12104(pick.profile);return{ok,pick,path:Game.pendingPath?.length,a:Game.livingStreetsV134.patrolRouting.activeRoute}}''')
+    print('SETUP',setup,flush=True)
+    assert setup['ok'] and setup['a']
+    assert p.evaluate('()=>saveGame(11,true)') is True
+    diag=p.evaluate('''()=>{Game.pendingPath=null;Game._v133TravelTarget=null;Game.livingStreetsV134.patrolRouting.activeRoute=null;const ok=loadGame(11),a=Game.livingStreetsV134?.patrolRouting?.activeRoute,w=currentDistrictV133(),cp=Game.livingStreetsV134?.controlPosts?.approach||null,ti=Game.livingStreetsV134?.transitIncidents?.active||null,dist=a&&Game.ovPlayer?Math.hypot(Game.ovPlayer.x-a.goal.x,Game.ovPlayer.y-a.goal.y):null,plan=a?planPatrolRoutesV12104(a.goal,a.target,w):null;return{ok,a,world:w?.id,player:Game.ovPlayer&&{x:Game.ovPlayer.x,y:Game.ovPlayer.y},cp,ti,dist,plan:!!plan,profilePlan:!!plan?.plans?.[a?.profile],windowInit:String(window.initOverworldV133).slice(0,260),windowInitSame:window.initOverworld===window.initOverworldV133,screen:Game.screen,stats:{...Game.livingStreetsV134?.patrolRouting?.stats}}}''')
+    print('AFTER LOAD BEFORE PUBLIC INIT',diag,flush=True)
+    after=p.evaluate('''()=>{showScreen('overworld-screen');const ret=window.initOverworldV133();return{ret,stats:{...Game.livingStreetsV134.patrolRouting.stats},a:Game.livingStreetsV134.patrolRouting.activeRoute,cp:Game.livingStreetsV134?.controlPosts?.approach||null,ti:Game.livingStreetsV134?.transitIncidents?.active||null}}''')
+    print('IMMEDIATE AFTER PUBLIC INIT',after,flush=True)
+    p.wait_for_timeout(250)
+    later=p.evaluate('''()=>({stats:{...Game.livingStreetsV134.patrolRouting.stats},a:Game.livingStreetsV134.patrolRouting.activeRoute,path:Game.pendingPath?.length||0,player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y},cp:Game.livingStreetsV134?.controlPosts?.approach||null,ti:Game.livingStreetsV134?.transitIncidents?.active||null})''')
+    print('250MS LATER',later,flush=True)
+    manual=p.evaluate('''()=>{const before={stats:{...Game.livingStreetsV134.patrolRouting.stats},a:Game.livingStreetsV134.patrolRouting.activeRoute};const ok=resumePatrolRouteV12104();return{before,ok,after:{stats:{...Game.livingStreetsV134.patrolRouting.stats},a:Game.livingStreetsV134.patrolRouting.activeRoute,path:Game.pendingPath?.length||0}}}''')
+    print('MANUAL RESUME',manual,flush=True)
+    c.close();b.close()
