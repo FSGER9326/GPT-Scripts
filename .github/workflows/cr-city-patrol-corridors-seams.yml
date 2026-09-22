@@ -1,0 +1,150 @@
+name: CR City Patrol Corridors Seam Audit
+
+on:
+  push:
+    branches: [chrome-requiem-city-patrol-corridors-08]
+    paths:
+      - '.github/workflows/cr-city-patrol-corridors-seams.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact PWA12.104 + Candidates 01-07
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact work
+          gh api -H 'Accept: application/vnd.github+json' /repos/FSGER9326/GPT-Scripts/actions/artifacts/10668614759/zip > artifact.zip
+          unzip -q artifact.zip -d artifact
+          INNER=$(find artifact -maxdepth 1 -name '*FACTION_STREET_FAVORS_CANDIDATE_01_source.zip' -print -quit)
+          unzip -q "$INNER" -d work
+          ROOT=$(find work -maxdepth 1 -type d -name 'Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01' -print -quit)
+          python3 scripts/cr_restore_pwa12_104_from_105.py "$ROOT"
+          cd "$ROOT"
+          python3 tools/rebundle_runtime.py >/dev/null
+          python3 tools/build_pwa11.py '14.0.0-pwa.12.104-street-contact-support' >/dev/null
+          python3 -c "import json;m=json.load(open('build-meta.json'));assert m['buildHash']=='4313da4acd4c324a7672c36e';assert m['schemaVersion']==14"
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/cr_city_dispatches_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_logistics_ui_preserve.py "$ROOT"
+          python3 scripts/cr_city_interdistrict_lastmile_atomic_patch.py "$ROOT"
+          python3 scripts/cr_city_runtime_bundle_order_patch.py "$ROOT"
+          python3 scripts/cr_city_dynamic_disruptions_patch.py "$ROOT"
+          python3 scripts/cr_city_dynamic_disruptions_time_fix.py "$ROOT"
+          python3 scripts/cr_city_multihop_logistics_patch.py "$ROOT"
+          python3 scripts/cr_city_multihop_ui_entry_fix.py "$ROOT"
+          python3 scripts/cr_city_access_ecology_patch_seam_fix.py scripts/cr_city_access_ecology_patch.py
+          python3 scripts/cr_city_access_ecology_patch.py "$ROOT"
+          python3 scripts/cr_city_transit_incidents_patch.py "$ROOT"
+          cp scripts/cr_city_transit_incidents_browser.py "$ROOT/tests/pwa12_104_city_transit_incidents_browser.py"
+          python3 scripts/cr_city_transit_incidents_persistence_fix.py "$ROOT"
+          python3 scripts/cr_city_control_posts_patch_seam_fix.py scripts/cr_city_control_posts_patch.py
+          python3 scripts/cr_city_control_posts_patch.py "$ROOT"
+          python3 scripts/cr_city_control_posts_ecology_clearance_fix.py "$ROOT"
+          cp scripts/cr_city_control_posts_contract.py "$ROOT/tests/pwa12_104_city_control_posts_contract.py"
+          cp scripts/cr_city_control_posts_browser.py "$ROOT/tests/pwa12_104_city_control_posts_browser.py"
+          python3 scripts/cr_city_control_posts_browser_lifecycle_fix.py "$ROOT"
+          python3 scripts/cr_city_control_posts_route_wakeup_fix.py "$ROOT"
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Extract exact routing and UI seams
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re,json
+          root=Path(os.environ['ROOT'])
+          out=[]
+          def section(t): out.append('\n\n===== '+t+' =====\n')
+          def brace_extract(text,pos):
+              b=text.find('{',pos)
+              if b<0:return text[pos:pos+2500]
+              depth=0; quote=None; esc=False; line=False; block=False
+              i=b
+              while i<len(text):
+                  c=text[i]; n=text[i+1] if i+1<len(text) else ''
+                  if line:
+                      if c=='\n': line=False
+                  elif block:
+                      if c=='*' and n=='/': block=False;i+=1
+                  elif quote:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: quote=None
+                  else:
+                      if c=='/' and n=='/': line=True;i+=1
+                      elif c=='/' and n=='*': block=True;i+=1
+                      elif c in "'\"`": quote=c
+                      elif c=='{': depth+=1
+                      elif c=='}':
+                          depth-=1
+                          if depth==0:return text[pos:i+1]
+                  i+=1
+              return text[pos:pos+6000]
+          def extract_fn(path,names):
+              s=path.read_text(encoding='utf-8')
+              section(str(path.relative_to(root)))
+              for name in names:
+                  pats=[rf'function\s+{re.escape(name)}\s*\(',rf'(?:window\.)?{re.escape(name)}\s*=\s*(?:async\s*)?function\s*\(',rf'(?:const|let|var)\s+{re.escape(name)}\s*=\s*(?:async\s*)?\([^;]*?=>\s*\{{']
+                  found=None
+                  for pat in pats:
+                      m=re.search(pat,s)
+                      if m: found=m;break
+                  out.append('\n--- '+name+' ---\n')
+                  if found: out.append(brace_extract(s,found.start())+'\n')
+                  else:
+                      for m in list(re.finditer(re.escape(name),s))[:4]:
+                          out.append(s[max(0,m.start()-650):min(len(s),m.end()+1450)]+'\n')
+          dw=root/'src/world/district-worlds-v13-3.js'
+          ls=root/'src/world/living-streets-v13-4a.js'
+          cp=root/'src/world/district-control-posts-pwa12-104-city-candidate-07.js'
+          ae=root/'src/world/access-ecology-pwa12-104-city-candidate-05.js'
+          extract_fn(dw,['findDistrictPathV133','routeToPointV133','routeToLocationV133','routeToTransitNodeV133','handleMapTapV133','initOverworldV133','openTransitNodeV133','travelDistrictV133','scheduleOverworldLoopV133','wakeOverworldV133'])
+          extract_fn(ls,['onStreetStepV134','drawLivingStreetsV134','handleLivingStreetTapV134','ensureLivingStreetsStateV134','ensureNeighborhoodStateV134','runEncounterDirectorV134'])
+          extract_fn(cp,['controlPostForLinkV12104','controlPostsForWorldV12104','routeControlPostV12104','drawControlPostsV12104','handleControlPostTapV12104','openControlPostV12104'])
+          extract_fn(ae,['evaluateAccessEcologyV12104','accessEcologyForLinkV12104'])
+          section('ROUTE UI / HUD OCCURRENCES')
+          for p in [dw,ls,cp]:
+              s=p.read_text(encoding='utf-8')
+              for pat in ['route-card','routeCard','route card','pendingPath','travel-target','travelTarget','ov-route','ROUTE']:
+                  hits=list(re.finditer(re.escape(pat),s,re.I))
+                  if hits:
+                      out.append(f'\n## {p.name} :: {pat} ({len(hits)})\n')
+                      for m in hits[:12]: out.append(s[max(0,m.start()-450):min(len(s),m.end()+850)]+'\n')
+          section('STREET MEMORY / DISCOVERY OCCURRENCES')
+          for p in sorted((root/'src').rglob('*.js')):
+              s=p.read_text(encoding='utf-8',errors='ignore')
+              hits=[]
+              for pat in ['streetMemory','Street Memory','street memory','secrets','visitedNeighborhood','visitedHood','discoveredNeighborhood','knownNeighborhood']:
+                  if re.search(re.escape(pat),s,re.I): hits.append(pat)
+              if hits:
+                  out.append(f'\n## {p.relative_to(root)} :: {hits}\n')
+                  for pat in hits:
+                      for m in list(re.finditer(re.escape(pat),s,re.I))[:4]: out.append(s[max(0,m.start()-350):min(len(s),m.end()+700)]+'\n')
+          section('CSS ROUTE / CONTROL POST SEAMS')
+          for p in sorted((root/'src/css').glob('*.css')):
+              s=p.read_text(encoding='utf-8',errors='ignore')
+              if re.search(r'route|control-post|street',s,re.I):
+                  out.append(f'\n## {p.name}\n')
+                  for m in list(re.finditer(r'route|control-post',s,re.I))[:20]: out.append(s[max(0,m.start()-300):min(len(s),m.end()+650)]+'\n')
+          Path('candidate08-seam-audit.txt').write_text(''.join(out),encoding='utf-8')
+          print(''.join(out))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate08-seam-audit
+          path: candidate08-seam-audit.txt
+          retention-days: 7
