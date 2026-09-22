@@ -72,12 +72,14 @@ candidate = r'''function installLegacySaveBridge({target=globalThis,persistence,
    }
    const ok=legacySave(n,quiet);
    if(ok!==false){
-     // Capture the exact durable state at the save call boundary. The v14 mirror
-     // writes asynchronously; serializing later inside the persistence queue can
-     // otherwise make rapid saves all persist a newer shared Game state and rotate
-     // the wrong recovery snapshot into backup.
-     const payload=captureSnapshot();
-     if(payload)queue(()=>persistSnapshot(n,payload));
+     // Preserve the canonical exact save-call-boundary snapshot behavior verbatim;
+     // inherited regression contracts depend on this ordering as well as its semantics.
+     let payload;
+     try{payload=JSON.parse(serialize())}catch(err){
+       console.warn('[CR14] save snapshot capture failed:',err?.message||err);
+       return ok;
+     }
+     queue(()=>persistSnapshot(n,payload));
    }
    return ok;
  }
