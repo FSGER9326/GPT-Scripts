@@ -15,64 +15,53 @@ jobs:
       - name: Prepare PWA12.142 candidate and integrate recovery bonds
         run: |
           python3 - <<'PY'
-          import zipfile,pathlib,shutil,re,json
+          import zipfile,pathlib,shutil,re
           z=zipfile.ZipFile('source138.zip'); names=z.namelist(); idx=next(n for n in names if n.endswith('/index.html')); oldroot=idx[:-len('index.html')]
-          tmp=pathlib.Path('extract'); z.extractall(tmp)
-          src=tmp/oldroot
+          tmp=pathlib.Path('extract'); z.extractall(tmp); src=tmp/oldroot
           dst=pathlib.Path('Chrome_Requiem_v14_PWA_pwa12_142_RECOVERY_BONDS_CANDIDATE_01_source')
           if dst.exists(): shutil.rmtree(dst)
           shutil.copytree(src,dst)
-          js=(pathlib.Path('ci/recovery-support-v14.js').read_text())
+          js=pathlib.Path('ci/recovery-support-v14.js').read_text()
           js=js.replace("renderRecoverySupportV14:renderSupport,runDiagnosticsRecoverySupportV14", "renderRecoverySupportV14:renderSupport,decorateRecoverySupportBriefingV14:decorateBriefing,runDiagnosticsRecoverySupportV14")
           js=js.replace("add('mission exclusion hook',window.createCombatUnits===createCombatUnits)", "add('mission exclusion hook',typeof window.createCombatUnits==='function')")
           js=js.replace("if(!(patient.injuries||[]).includes(a.injuryId))return h?.outcome||'treated_elsewhere';", "if(!(patient.injuries||[]).includes(a.injuryId)){if(h?.outcome)return h.outcome;return Number(Game.day||1)>=Number(a.dueDay||Infinity)?'recovered':'treated_elsewhere';}")
           (dst/'src/company/recovery-support-v14.js').write_text(js)
-          (dst/'src/styles/38-v14-recovery-bonds.css').write_text(pathlib.Path('ci/38-v14-recovery-bonds.css').read_text())
+          css=pathlib.Path('ci/38-v14-recovery-bonds.css').read_text(); (dst/'src/styles/38-v14-recovery-bonds.css').write_text(css)
           shutil.copy2('ci/pwa12_142_recovery_bonds_browser.py',dst/'tests/pwa12_142_recovery_bonds_browser.py')
-          # Module registry/order.
-          p=dst/'src/bootstrap/module-manifest.js'; t=p.read_text()
-          lines=t.splitlines(); out=[]; reg=False; order=False
+          p=dst/'src/bootstrap/module-manifest.js'; t=p.read_text(); lines=t.splitlines(); out=[]
           for line in lines:
               out.append(line)
               if "'company.crewIntercession'" in line and 'path:' in line and 'company.recoverySupport' not in t:
-                  indent=line[:len(line)-len(line.lstrip())]; out.append(indent+"'company.recoverySupport':{path:'./src/company/recovery-support-v14.js',kind:'module'},") ; reg=True
+                  ind=line[:len(line)-len(line.lstrip())]; out.append(ind+"'company.recoverySupport':{path:'./src/company/recovery-support-v14.js',kind:'module'},")
               elif line.strip()=="'company.crewIntercession'," and "'company.recoverySupport'," not in t:
-                  indent=line[:len(line)-len(line.lstrip())]; out.append(indent+"'company.recoverySupport',"); order=True
+                  ind=line[:len(line)-len(line.lstrip())]; out.append(ind+"'company.recoverySupport',")
           p.write_text('\n'.join(out)+'\n')
-          # Compatibility diagnostics.
           p=dst/'src/bootstrap/compatibility-manifest.js'; t=p.read_text()
           if 'runDiagnosticsRecoverySupportV14' not in t:
               lines=t.splitlines(); out=[]; inserted=False
               for line in lines:
                   out.append(line)
                   if 'runDiagnosticsCrewIntercessionV14' in line:
-                      indent=line[:len(line)-len(line.lstrip())]
-                      suffix=',' if line.rstrip().endswith(',') else ','
-                      out.append(indent+"'runDiagnosticsRecoverySupportV14',"); inserted=True
+                      ind=line[:len(line)-len(line.lstrip())]; out.append(ind+"'runDiagnosticsRecoverySupportV14',"); inserted=True
               if not inserted: raise SystemExit('compatibility insertion anchor missing')
               p.write_text('\n'.join(out)+'\n')
-          # Add bundled sources to build exclusions so they are not double-precached.
           p=dst/'tools/build_pwa11.py'; t=p.read_text(); lines=t.splitlines(); out=[]
           for line in lines:
               out.append(line)
-              if "src/company/crew-intercession-v14.js" in line and 'recovery-support-v14.js' not in t:
-                  indent=line[:len(line)-len(line.lstrip())]; quote='"' if '"' in line else "'"; out.append(indent+quote+'src/company/recovery-support-v14.js'+quote+',')
-              if "src/styles/37-v14-crew-intercession.css" in line and '38-v14-recovery-bonds.css' not in t:
-                  indent=line[:len(line)-len(line.lstrip())]; quote='"' if '"' in line else "'"; out.append(indent+quote+'src/styles/38-v14-recovery-bonds.css'+quote+',')
+              if 'src/company/crew-intercession-v14.js' in line and 'recovery-support-v14.js' not in t:
+                  ind=line[:len(line)-len(line.lstrip())]; q='"' if '"' in line else "'"; out.append(ind+q+'src/company/recovery-support-v14.js'+q+',')
+              if 'src/styles/37-v14-crew-intercession.css' in line and '38-v14-recovery-bonds.css' not in t:
+                  ind=line[:len(line)-len(line.lstrip())]; q='"' if '"' in line else "'"; out.append(ind+q+'src/styles/38-v14-recovery-bonds.css'+q+',')
           p.write_text('\n'.join(out)+'\n')
-          # Runtime bundle: insert new source immediately after Crew Intercession.
-          def insert_after_source(bundle_path,source_marker,new_marker,new_text):
-              text=bundle_path.read_text(); marker=f'/* SOURCE: {source_marker} */'; pos=text.find(marker)
-              if pos<0: raise SystemExit(f'marker missing: {marker}')
-              search_from=pos+len(marker); m=re.search(r'/\* SOURCE: [^*]+ \*/',text[search_from:]); ins=search_from+(m.start() if m else len(text)-search_from)
-              if new_marker not in text: text=text[:ins]+f'\n/* SOURCE: {new_marker} */\n'+new_text.rstrip()+'\n\n'+text[ins:]
-              bundle_path.write_text(text)
-          insert_after_source(dst/'src/runtime/runtime-bundle.js','src/company/crew-intercession-v14.js','src/company/recovery-support-v14.js',js)
-          insert_after_source(dst/'src/styles/styles-bundle.css','src/styles/37-v14-crew-intercession.css','src/styles/38-v14-recovery-bonds.css',(dst/'src/styles/38-v14-recovery-bonds.css').read_text())
-          # Traceability marker in source root.
+          def insert_after(bp,old,new,text):
+              s=bp.read_text(); marker=f'/* SOURCE: {old} */'; pos=s.find(marker)
+              if pos<0: raise SystemExit('missing source marker '+marker)
+              start=pos+len(marker); m=re.search(r'/\* SOURCE: [^*]+ \*/',s[start:]); ins=start+(m.start() if m else len(s)-start)
+              if new not in s: s=s[:ins]+f'\n/* SOURCE: {new} */\n'+text.rstrip()+'\n\n'+s[ins:]
+              bp.write_text(s)
+          insert_after(dst/'src/runtime/runtime-bundle.js','src/company/crew-intercession-v14.js','src/company/recovery-support-v14.js',js)
+          insert_after(dst/'src/styles/styles-bundle.css','src/styles/37-v14-crew-intercession.css','src/styles/38-v14-recovery-bonds.css',css)
           (dst/'PWA12_142_BASELINE.txt').write_text('Baseline: PWA12.138 Crew Intercession Rebase Candidate 01 QA Verified\nParent cumulative line: PWA12.136 Integration Release Candidate 01\nNew subsystem: Crew Recovery Bonds / recovery support\n')
-          print('prepared',dst)
-          print('module registry inserted',reg,'order inserted',order)
           PY
       - name: Build candidate and syntax-check executable bundles
         working-directory: Chrome_Requiem_v14_PWA_pwa12_142_RECOVERY_BONDS_CANDIDATE_01_source
@@ -86,7 +75,6 @@ jobs:
         working-directory: Chrome_Requiem_v14_PWA_pwa12_142_RECOVERY_BONDS_CANDIDATE_01_source
         run: |
           set -o pipefail
-          mkdir -p qa
           python3 tests/pwa12_123_mission_lifecycle_contract.py | tee qa/mission-lifecycle.log
           python3 tests/pwa12_31_save_recovery_contract.py | tee qa/save-recovery.log
           python3 tests/pwa12_38_save_snapshot_atomicity_contract.py | tee qa/save-atomicity.log
@@ -113,78 +101,18 @@ jobs:
       - name: Write development record and package candidate
         run: |
           python3 - <<'PY'
-          import pathlib,json,hashlib,zipfile,datetime
+          import pathlib,json,hashlib,zipfile
           root=pathlib.Path('Chrome_Requiem_v14_PWA_pwa12_142_RECOVERY_BONDS_CANDIDATE_01_source')
           meta=json.loads((root/'build-meta.json').read_text())
-          note=f'''# PWA12.142 — Recovery Bonds Candidate 01
-
-## Baseline and scope
-- Baseline: **PWA12.138 Crew Intercession Rebase Candidate 01 QA Verified**, itself rebased onto the PWA12.136 cumulative integration line.
-- Candidate: `{meta['version']}`
-- Build hash: `{meta['buildHash']}`
-- Save schema: `{meta['schemaVersion']}` (unchanged).
-- Canonical/release files were not overwritten; this is a separate source candidate.
-
-## Playable systemic improvement — Crew Recovery Bonds
-Recovery is now a relationship and roster decision rather than only a timer/contact-favor choice. During a multi-day serious-injury recovery case, the player can commit another ACTIVE non-lead operative as the patient's recovery partner. The helper moves to RESERVE, the patient recovers one campaign day sooner, and both are unavailable for missions while the assignment is live.
-
-Eligibility derives from existing identity/relationship state rather than a new affinity bar:
-- **Bonded support:** LOY 4+, shared origin faction, shared origin contact, or the existing `Loyal` trait. A bonded helper may qualify from LOY 2 and takes no loyalty penalty on successful recovery.
-- **Professional/strained support:** an otherwise unbonded helper requires LOY 3. The pairing is explicitly shown as STRAINED and costs the helper **1 loyalty when the patient actually completes recovery**.
-- LOY below these thresholds cannot be assigned.
-
-The assignment persists under `Game.companyV135.recoverySupportV14`, so schema 14 remains valid. It records patient/helper IDs, relationship reason, original and shortened due day, roster restoration target, strain state, and bounded history. While assigned, normalization forcibly keeps the helper in RESERVE even if another UI path attempts to reactivate them. On case completion/cancellation the helper is released; an eligible helper returns to ACTIVE only up to the pre-assignment active-team count.
-
-## Player-facing integration
-- Recovery Board gains **CREW RECOVERY BONDS** choices with the exact helper, loyalty, relationship reason, BONDED/STRAINED state, one-day benefit, dual-roster cost, and any future loyalty consequence shown before commitment.
-- Mission briefing gains a `RECOVERY DETAIL` notice naming patient/helper and due day.
-- Combat and mission availability inherit the existing ACTIVE/RESERVE gates, so neither patient nor assigned helper can deploy.
-- Safehouse, mission briefing, combat-unit creation, time advance, recovery processing, load, and company rendering normalize live assignments.
-- Mobile recovery controls are responsive and use a 44px minimum control height at phone widths.
-
-## Exact implementation
-- Added `src/company/recovery-support-v14.js` (`14.0-social.5`).
-- Added `src/styles/38-v14-recovery-bonds.css`.
-- Registered `company.recoverySupport` after `company.crewIntercession` in the module registry/order.
-- Added `runDiagnosticsRecoverySupportV14` to compatibility diagnostics.
-- Added source/CSS to the runtime/style bundles and build exclusions.
-- Added `tests/pwa12_142_recovery_bonds_browser.py`.
-
-## Verification performed
-The dedicated browser flow passed at **390×844** and verified:
-1. real Recovery Network start moves the injured operative out of ACTIVE duty;
-2. relationship-gated helper discovery distinguishes bonded and strained candidates;
-3. the visible Recovery Board selector/button is reachable and the button is at least 44px high;
-4. assigning a helper shortens recovery by exactly one day and removes that helper from ACTIVE duty;
-5. both patient and helper are absent from deployable ACTIVE crew;
-6. forced/manual helper reactivation is normalized back to RESERVE;
-7. mission-briefing `RECOVERY DETAIL` consequence is rendered;
-8. slot save → destructive in-memory mutation → slot load restores the recovery-support assignment;
-9. bonded completion returns the helper without a loyalty penalty;
-10. strained completion applies exactly -1 helper loyalty and records the recovered outcome;
-11. no horizontal overflow occurs at 390×844.
-
-Focused regressions also passed for mission lifecycle, save recovery, atomic save snapshots, module-manifest topology, service-worker behavior, executable JavaScript syntax, and release preflight. Exact command outputs are retained under `qa/`.
-
-## Continuity and balance risks
-- **Roster compression:** one-day recovery acceleration costs an additional deployable operative, which is meaningful with small teams but may become cheap with a very large reserve roster. Future balancing should scale opportunity cost rather than simply increasing loyalty penalties.
-- **Strain predictability:** the -1 LOY consequence is deliberately disclosed before assignment. Hidden random complications were rejected because they would turn relationships into opaque punishment rather than informed choice.
-- **Low-loyalty shared bonds:** LOY 2 can support only when a concrete existing bond exists. This should be watched for cases where generated origins make shared-faction bonds too common.
-- **Automatic return:** helpers return to ACTIVE only if the assignment had reduced the active count and they remain medically deployable. Deliberate roster changes during recovery can therefore leave a released helper in RESERVE, by design.
-- **Parallel branch integration:** this candidate descends from the QA-verified PWA12.138 social branch, not from later unrelated parallel candidates. Integration Director must merge against the newest cumulative line rather than use last-write-wins.
-
-## Next social-system target
-**Recruitment references and probation.** Let trusted contacts or existing operatives sponsor a recruit, changing signing cost/initial loyalty and creating a short probation obligation. Success should strengthen the sponsor relationship; mission abandonment, ideological conflict, or dismissal during probation should create sponsor/contact consequences. This would connect recruitment identity, contact trust, existing squad loyalty, and mission choices without adding a cosmetic affinity layer.
-'''
+          note=pathlib.Path('ci/DEVELOPMENT_NOTE_PWA12_142_RECOVERY_BONDS.md').read_text()
+          note=note.replace('{{VERSION}}',str(meta['version'])).replace('{{BUILD_HASH}}',str(meta['buildHash'])).replace('{{SCHEMA}}',str(meta['schemaVersion']))
           (root/'DEVELOPMENT_NOTE_PWA12_142_RECOVERY_BONDS.md').write_text(note)
           out=pathlib.Path('Chrome_Requiem_v14_PWA_pwa12_142_RECOVERY_BONDS_CANDIDATE_01_source.zip')
-          if out.exists():out.unlink()
           with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
               for p in root.rglob('*'):
-                  if p.is_file():z.write(p,arcname=str(root.name/pathlib.Path(p.relative_to(root))))
-          sha=hashlib.sha256(out.read_bytes()).hexdigest()
-          pathlib.Path('PWA12_142_SHA256.txt').write_text(f'{sha}  {out.name}\n')
-          print('archive',out,'bytes',out.stat().st_size,'sha256',sha)
+                  if p.is_file(): z.write(p,arcname=str(root.name/pathlib.Path(p.relative_to(root))))
+          sha=hashlib.sha256(out.read_bytes()).hexdigest(); pathlib.Path('PWA12_142_SHA256.txt').write_text(f'{sha}  {out.name}\n')
+          print(out.name,out.stat().st_size,sha)
           PY
       - uses: actions/upload-artifact@v4
         with:
