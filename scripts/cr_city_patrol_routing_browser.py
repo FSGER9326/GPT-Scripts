@@ -23,13 +23,29 @@ with sync_playwright() as pw:
       if(ranked[0])Object.assign(ns[ranked[0].id],{localHeat:100,security:5,gangPressure:1,unrest:1});
       if(ranked[1])Object.assign(ns[ranked[1].id],{localHeat:20,security:2,gangPressure:5,unrest:5});
       const pts=[...Object.values(w.locations).map(p=>({x:p.x,y:p.y,id:p.id,kind:'location'})),...w.transit.map(p=>({x:p.x,y:p.y,id:p.id,kind:'transit'}))];
-      let chosen=null,fallback=null;
-      for(let i=0;i<pts.length;i++)for(let j=0;j<pts.length;j++){if(i===j||Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y)<28)continue;Game.ovPlayer={x:pts[i].x,y:pts[i].y};const p=planPatrolRoutesV12104({x:pts[j].x,y:pts[j].y},{kind:'point',label:'QA STREET TARGET'});if(!p?.plans?.fast||!p.plans.low||!p.plans.back)continue;const sig=x=>x.path.map(q=>q.x+','+q.y).join('|'),different=sig(p.plans.fast)!==sig(p.plans.low)||sig(p.plans.fast)!==sig(p.plans.back),best=Math.min(p.plans.low.analysis.exposure,p.plans.back.analysis.exposure);if(different&&!fallback)fallback={start:pts[i],goal:pts[j],plans:p,pick:p.plans.low.analysis.exposure<=p.plans.back.analysis.exposure?'low':'back'};if(different&&p.plans.fast.analysis.exposure>=8&&best<p.plans.fast.analysis.exposure){chosen={start:pts[i],goal:pts[j],plans:p,pick:p.plans.low.analysis.exposure<=p.plans.back.analysis.exposure?'low':'back'};break}}if(chosen)break;
-      chosen=chosen||fallback;if(!chosen)throw new Error('No canonical physical point pair produced distinct route tactics under forced patrol pressure');
+      const pairs=[];
+      for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+        const d=Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y);if(d<28)continue;
+        pairs.push({start:pts[i],goal:pts[j],d});pairs.push({start:pts[j],goal:pts[i],d});
+      }
+      // Long physical lines are most likely to cross the forced central patrol pressure. Limit
+      // route comparisons so QA validates gameplay rather than turning into an A* stress test.
+      pairs.sort((a,b)=>b.d-a.d);let chosen=null,fallback=null,checked=0;
+      for(const pair of pairs.slice(0,32)){
+        Game.ovPlayer={x:pair.start.x,y:pair.start.y};
+        const base=findDistrictPathV133(Game.ovPlayer,pair.goal,w);if(!base?.length||base.length<24)continue;
+        const p=planPatrolRoutesV12104({x:pair.goal.x,y:pair.goal.y},{kind:'point',label:'QA STREET TARGET'});checked++;
+        if(!p?.plans?.fast||!p.plans.low||!p.plans.back)continue;
+        const sig=x=>x.path.map(q=>q.x+','+q.y).join('|'),different=sig(p.plans.fast)!==sig(p.plans.low)||sig(p.plans.fast)!==sig(p.plans.back),best=Math.min(p.plans.low.analysis.exposure,p.plans.back.analysis.exposure);
+        if(different&&!fallback)fallback={start:pair.start,goal:pair.goal,plans:p,pick:p.plans.low.analysis.exposure<=p.plans.back.analysis.exposure?'low':'back'};
+        if(different&&p.plans.fast.analysis.exposure>=8&&best<p.plans.fast.analysis.exposure){chosen={start:pair.start,goal:pair.goal,plans:p,pick:p.plans.low.analysis.exposure<=p.plans.back.analysis.exposure?'low':'back'};break}
+      }
+      chosen=chosen||fallback;if(!chosen)throw new Error(`No canonical physical point pair produced distinct route tactics in ${checked} bounded comparisons under forced patrol pressure`);
       Game.ovPlayer={x:chosen.start.x,y:chosen.start.y};Game.districtWorldsV133.positions[w.id]={x:chosen.start.x,y:chosen.start.y};Game.pendingPath=null;Game._v133TravelTarget=null;
-      const corridors=patrolCorridorsForWorldV12104(w);return{start:chosen.start,goal:chosen.goal,pick:chosen.pick,plans:{fast:chosen.plans.fast.analysis,low:chosen.plans.low.analysis,back:chosen.plans.back.analysis},corridors:corridors.length,hoods:ranked.slice(0,2).map(x=>x.id)};
+      const corridors=patrolCorridorsForWorldV12104(w);return{start:chosen.start,goal:chosen.goal,pick:chosen.pick,plans:{fast:chosen.plans.fast.analysis,low:chosen.plans.low.analysis,back:chosen.plans.back.analysis},corridors:corridors.length,hoods:ranked.slice(0,2).map(x=>x.id),checked};
     }''')
     assert setup['corridors']>0,setup
+    assert 1<=setup['checked']<=32,setup
     assert setup['plans']['fast']['cells']>0 and setup['plans']['low']['cells']>0 and setup['plans']['back']['cells']>0,setup
     assert setup['pick'] in ('low','back'),setup
     assert min(setup['plans']['low']['exposure'],setup['plans']['back']['exposure'])<=setup['plans']['fast']['exposure'],setup
@@ -50,8 +66,6 @@ with sync_playwright() as pw:
     assert page.evaluate('()=>saveGame(11,true)') is True
     restored=page.evaluate('''()=>{Game.pendingPath=null;Game._v133TravelTarget=null;Game.livingStreetsV134.patrolRouting.activeRoute=null;const ok=loadGame(11),saved=Game.livingStreetsV134?.patrolRouting?.activeRoute,stats={...Game.livingStreetsV134?.patrolRouting?.stats};showScreen('overworld-screen');initOverworldV133();return{ok,saved,stats,player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y}}}''')
     assert restored['ok'] and restored['saved'] and restored['saved']['profile']==setup['pick'],restored
-    # Canonical movement can consume a resumed path very quickly. Observe the durable resume
-    # counter instead of requiring the transient Game.pendingPath array to still be in flight.
     page.wait_for_function("n=>Game.livingStreetsV134?.patrolRouting?.stats?.resumed>n",arg=restored['stats']['resumed'],timeout=5000)
     resumed=page.evaluate('''()=>({path:Game.pendingPath?.length||0,a:Game.livingStreetsV134.patrolRouting.activeRoute,stats:{...Game.livingStreetsV134.patrolRouting.stats},player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y}})''')
     assert resumed['stats']['resumed']>restored['stats']['resumed'],(restored,resumed)
@@ -60,17 +74,12 @@ with sync_playwright() as pw:
     else:
         assert resumed['stats']['completed']>restored['stats']['completed'],(restored,resumed)
 
-    # Prove resumption produced physical movement, not route-state bookkeeping or teleportation.
-    # If the canonical scheduler already completed the route before inspection, the restored
-    # start position still proves that the crew traversed away from the saved location.
     if resumed['player']==restored['player']:
         sx,sy=restored['player']['x'],restored['player']['y']
         page.wait_for_function(f"()=>Game.ovPlayer&&(Game.ovPlayer.x!={sx}||Game.ovPlayer.y!={sy})",timeout=10000)
     moved=page.evaluate('''()=>({player:{x:Game.ovPlayer.x,y:Game.ovPlayer.y},path:Game.pendingPath?.length||0,a:Game.livingStreetsV134.patrolRouting.activeRoute,stats:{...Game.livingStreetsV134.patrolRouting.stats},exposureSteps:Game.livingStreetsV134.patrolRouting.stats.exposureSteps})''')
     assert moved['player']!=restored['player'],(restored,resumed,moved)
 
-    # A non-planner programmatic route still goes through canonical routeToLocationV133,
-    # and therefore must supersede the persisted manual tactical route cleanly.
     superseded=page.evaluate('''()=>{Game.pendingPath=null;const w=currentDistrictV133(),e=Object.entries(w.locations).find(([id,p])=>Math.hypot(Game.ovPlayer.x-p.x,Game.ovPlayer.y-p.y)>5);if(!e)return{skip:true};const before=document.getElementById('v12104-route-planner')?.hidden!==false,ok=routeToLocationV133(e[0]),a=Game.livingStreetsV134.patrolRouting.activeRoute;return{skip:false,before,ok,path:Game.pendingPath?.length||0,a,panelOpen:document.getElementById('v12104-route-planner')?.hidden===false}}''')
     if not superseded.get('skip'):
         assert superseded['before'] and superseded['ok'] and superseded['path']>1 and superseded['a'] is None and not superseded['panelOpen'],superseded
