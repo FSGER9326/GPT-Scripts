@@ -73,7 +73,6 @@ new_combat="""    page.wait_for_function(\"()=>{const s=document.getElementById(
     combat_done=page.evaluate('''()=>{const m=Game.activeMission,actor=m?.v134StreetActorType,ok=settleStreetCombatV134(m,true),a=activeInterdistrictDispatchV12104(),i=Game.livingStreetsV134.transitIncidents.active;return{ok,actor,phase:a?.phase,status:i?.status,clear:a?.transitIncidentClearances?.[i?.linkId]||null}}''')
 """
 if new_combat not in t:
-    # Replace either the original expectation or the one-run diagnostic block.
     diagnostic="""    page.wait_for_timeout(600)
     combat_entry=page.evaluate('''()=>({active:Game.activeMission?{id:Game.activeMission.id,v134:!!Game.activeMission.v134StreetEncounter}:null,screen:[...document.querySelectorAll('.screen')].find(x=>getComputedStyle(x).display!=='none')?.id||null,approach:Game.contractApproachesV134B?.plan?{ready:Game.contractApproachesV134B.plan.ready,missionId:Game.contractApproachesV134B.plan.missionId}:null,startType:typeof startMission,prevType:typeof V10PrevStartMission,visibleButtons:[...document.querySelectorAll('button')].filter(b=>getComputedStyle(b).display!=='none'&&b.offsetParent!==null).map(b=>b.textContent.trim()).filter(Boolean).slice(0,30),startSource:(typeof startMission==='function'?String(startMission).slice(0,1200):null),prevSource:(typeof V10PrevStartMission==='function'?String(V10PrevStartMission).slice(0,1200):null)} )''')
     print('CANDIDATE06 COMBAT ENTRY DIAGNOSTIC',combat_entry)
@@ -84,4 +83,33 @@ if new_combat not in t:
     elif old_combat in t:t=t.replace(old_combat,new_combat,1)
     else: raise SystemExit('Candidate 06 combat-entry browser seam missing')
 test.write_text(t,encoding='utf-8')
-print('hardened Candidate 06 save/load route resume and canonical V10 briefing/deploy combat lifecycle QA')
+
+# Candidate 05 originally asserted that an ecology-blocked route is rejected at selection.
+# Candidate 06 intentionally supersedes that behavior by routing to a physical checkpoint.
+# Keep the older regression meaningful: verify the new physical interception, reload the
+# pre-choice state, then continue exercising Candidate 05 contact sponsorship in isolation.
+eco_test=root/'tests/pwa12_104_city_access_ecology_browser.py'
+if eco_test.exists():
+    e=eco_test.read_text(encoding='utf-8')
+    old_eco="""        rejected=page.evaluate('(id)=>({ok:chooseInterdistrictTransitV12104(id),path:Game.pendingPath?.length||0})',setup['linkId'])
+        assert not rejected['ok'] and rejected['path']==0,rejected
+        sponsored=page.evaluate('''q=>{const before=Game.contactRelations[q.contact]?.trust,ok=sponsorTransitAccessV12104(q.linkId),after=Game.contactRelations[q.contact]?.trust,eco=evaluateTransitAccessEcologyV12104(q.linkId,'old_market','courier'),a=activeMultiHopDispatchV12104();return{ok,before,after,eco,stored:a?.accessEcologySponsors?.[q.linkId]||null,stats:Game.livingStreetsV134.accessEcology.stats}}''',setup)
+"""
+    new_eco="""        assert page.evaluate('()=>saveGame(3,true)') is True
+        if page.evaluate(\"()=>typeof window.CR_CITY_TRANSIT_INCIDENTS!=='undefined'\"):
+            intercepted=page.evaluate('''id=>{const ok=chooseInterdistrictTransitV12104(id),a=activeMultiHopDispatchV12104(),i=Game.livingStreetsV134?.transitIncidents?.active;return{ok,path:Game.pendingPath?.length||0,phase:a?.phase,incident:i&&{linkId:i.linkId,status:i.status,x:i.x,y:i.y},target:Game._v133TravelTarget?.kind||null}}''',setup['linkId'])
+            assert intercepted['ok'] and intercepted['path']>0 and intercepted['phase']=='to_incident' and intercepted['target']=='v12104incident',intercepted
+            assert intercepted['incident'] and intercepted['incident']['linkId']==setup['linkId'] and intercepted['incident']['status']=='approach',intercepted
+            pre=page.evaluate('''()=>{Game.pendingPath=null;Game._v133TravelTarget=null;const ok=loadGame(3);showScreen('overworld-screen');initOverworldV133();const a=activeMultiHopDispatchV12104(),i=Game.livingStreetsV134?.transitIncidents?.active;return{ok,phase:a?.phase,incident:i?.id||null,path:Game.pendingPath?.length||0}}''')
+            assert pre['ok'] and pre['phase']=='choose_transit' and pre['incident'] is None,pre
+        else:
+            rejected=page.evaluate('(id)=>({ok:chooseInterdistrictTransitV12104(id),path:Game.pendingPath?.length||0})',setup['linkId'])
+            assert not rejected['ok'] and rejected['path']==0,rejected
+        sponsored=page.evaluate('''q=>{const before=Game.contactRelations[q.contact]?.trust,ok=sponsorTransitAccessV12104(q.linkId),after=Game.contactRelations[q.contact]?.trust,eco=evaluateTransitAccessEcologyV12104(q.linkId,'old_market','courier'),a=activeMultiHopDispatchV12104();return{ok,before,after,eco,stored:a?.accessEcologySponsors?.[q.linkId]||null,stats:Game.livingStreetsV134.accessEcology.stats}}''',setup)
+"""
+    if new_eco not in e:
+        if old_eco not in e: raise SystemExit('Candidate 05 blocked-route browser seam missing')
+        e=e.replace(old_eco,new_eco,1)
+        eco_test.write_text(e,encoding='utf-8')
+
+print('hardened Candidate 06 route/combat lifecycle QA and adapted Candidate 05 cumulative browser regression')
