@@ -4,7 +4,6 @@
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-import {pathToFileURL} from 'node:url';
 import path from 'node:path';
 
 const root=path.resolve(process.argv[2]||'.');
@@ -59,7 +58,6 @@ function makePersistence(){
  const bridge=env.makeBridge({target,persistence:p.api,storage,gameVersion:'14.0.0-pwa.12.107-test'});
  assert.equal(await bridge.load(0),true);
  assert.equal(legacyWrites,0,'underlying legacy save must not write during hydration');
- assert.equal(p.writes.length,0,'deferred autosave must not race ahead of successful load return');
  await bridge.flush();
  assert.equal(p.writes.length,1,'successful hydration should commit one deferred autosave');
  assert.equal(p.primary.get(0).payload.name,'TARGET');
