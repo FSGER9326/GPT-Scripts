@@ -138,10 +138,12 @@ function makePersistence(){
  assert.equal(bridge.save(2,true),false,'load request must own the save/load boundary immediately');
  assert.equal(legacyWrites,0);
  await Promise.resolve();await Promise.resolve();await Promise.resolve();
- assert.deepEqual(loadCalls,[0],'second load entered persistence before first transaction released');
+ assert.equal(loadCalls.length,1,'second load entered persistence before first transaction released');
+ assert.equal(loadCalls[0],0);
  releaseFirst();
  assert.equal(await first,true);assert.equal(await second,true);
- assert.deepEqual(loadCalls,[0,1]);assert.equal(live.name,'SECOND');assert.equal(bridge.loadInProgress,false);
+ assert.equal(loadCalls.length,2);assert.equal(loadCalls[0],0);assert.equal(loadCalls[1],1);
+ assert.equal(live.name,'SECOND');assert.equal(bridge.loadInProgress,false);
  assert.equal(bridge.save(2,true),true,'ordinary saving should resume after load queue drains');
  await bridge.flush();
  assert.equal(legacyWrites,1);
