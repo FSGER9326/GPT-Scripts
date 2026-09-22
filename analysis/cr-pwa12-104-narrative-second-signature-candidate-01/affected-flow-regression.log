@@ -1,0 +1,12 @@
+PASS PWA12.67 browser: physically located handoff, two distinct exclusive outcomes, one-time markers, remote lock, mobile controls, no page errors
+PASS PWA12.49 interior exfil reroute changes final topology and response footprint {'active': {'id': 'route_chain', 'index': 2, 'count': 3, 'securitySuppressed': False, 'extractionRerouted': True, 'intelExtracted': False, 'console': {'x': 2, 'y': 9}, 'routeConsole': {'x': 4, 'y': 3}, 'intelConsole': {'x': 3, 'y': 7}}, 'shape': 'corridor', 'enemies': 2, 'strip': 'OPERATION 03/03 // EXTRACTION ROUTE // SECURITY RESPONSE: ESCALATED // EXFIL: MAINTENANCE ROUTE', 'exfil': {'x': 4, 'y': 0}}
+PASS PWA12.45 loud perimeter breach escalates later enemy response and energizes two extraction hazards {'enemies': ['Guard', 'Enforcer', 'Drone', 'Drone'], 'strip': 'OPERATION 02/03 // SECURED INTERIOR // SECURITY RESPONSE: ESCALATED', 'alerted': True} {'enemies': ['Enforcer', 'Drone', 'Guard'], 'hazards': [[6, 5], [4, 6]], 'strip': 'OPERATION 03/03 // EXTRACTION ROUTE // SECURITY RESPONSE: ESCALATED', 'alerted': True}
+DISTRICT_ART_PASS old_market market_street walls 12 covers 6
+DISTRICT_ART_PASS dock_nine dock walls 6 covers 6
+DISTRICT_ART_PASS forge_belt warehouse walls 4 covers 4
+DISTRICT_ART_PASS undergrid server_room walls 12 covers 6
+DISTRICT_ART_PASS neon_row club walls 12 covers 6
+DISTRICT_ART_PASS glass_heights office_entry walls 12 covers 6
+DISTRICT_ART_PASS civic_circuit parking_garage walls 11 covers 4
+DISTRICT_ART_PASS ash_blocks tenement_hall walls 6 covers 6
+MOBILE_ART_PASS {'board': 374, 'viewport': 390, 'scroll': 390, 'walls': 6} PAGE_ERRORS 0 MISSING_ASSETS 0

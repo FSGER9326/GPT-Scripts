@@ -1,0 +1,13 @@
+baseline_rc=1 candidate_rc=1
+Traceback (most recent call last):
+  File "/home/runner/work/GPT-Scripts/GPT-Scripts/baseline-pwa12-104/tests/pwa12_54_progressed_campaign_browser.py", line 22, in <module>
+    assert not diffs,f'durable save/load mismatches: {diffs}'
+           ^^^^^^^^^
+AssertionError: durable save/load mismatches: ['city', 'cityLife', 'districtWorldsV133', 'megaMapV132', 'ovPlayer', 'roster']
+--- candidate ---
+Traceback (most recent call last):
+  File "/home/runner/work/GPT-Scripts/GPT-Scripts/work/Chrome_Requiem_v14_PWA_pwa12_105_FACTION_STREET_FAVORS_CANDIDATE_01/tests/pwa12_54_progressed_campaign_browser.py", line 22, in <module>
+    assert not diffs,f'durable save/load mismatches: {diffs}'
+           ^^^^^^^^^
+AssertionError: durable save/load mismatches: ['city', 'cityLife', 'districtWorldsV133', 'megaMapV132', 'ovPlayer', 'roster']
+CONTROLLED PRE-EXISTING FAILURE: AssertionError: durable save/load mismatches: ['city', 'cityLife', 'districtWorldsV133', 'megaMapV132', 'ovPlayer', 'roster']

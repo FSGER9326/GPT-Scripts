@@ -1,0 +1,37 @@
+PASS candidate version
+PASS schema remains 14
+PASS arc state key
+PASS Mira physical location
+PASS fresh-game reachable trust gate
+PASS physical gating
+PASS two exclusive choices
+PASS ledger consequences
+PASS nameless consequences
+PASS equal player fee
+PASS journal and save
+PASS dossier hook
+PASS module manifest
+PASS module order
+PASS runtime source marker
+PASS css source marker
+PASS raw js excluded from precache
+PASS raw css excluded from precache
+PASS mobile single column
+PASS mobile control floor
+PASS overflow safety
+PASS Second Signature contract: 21/21 checks
+PWA12.104 street contact support contract PASS
+PASS safe parser
+PASS corrupt primary does not throw
+PASS corrupt backup does not throw
+PASS backup validation
+PASS bridge can fall back
+PASS pwa12.31 save recovery contract
+PASS safe menu wrapper installed
+PASS visible slot uses validated bridge
+PASS double click guarded
+PASS failure preserves button and data
+PASS hydration precedes routing
+PASS PWA12.62 save-slot UI routes through v14 checksum/backup recovery
+PWA11 MANIFEST CONTRACT PASS {'screenshots': [{'src': './assets/screenshots/wide-overworld.png', 'sizes': '1280x800', 'type': 'image/png', 'form_factor': 'wide', 'label': 'Old Market district exploration'}, {'src': './assets/screenshots/phone-overworld.png', 'sizes': '1082x2202', 'type': 'image/png', 'label': 'Old Market on mobile'}], 'categories': ['games', 'entertainment']}
+PWA11 SERVICE WORKER PASS { entries: 1145, cache: 'chrome-requiem-v14-c63eb388c467eb6cb2247de3' }
