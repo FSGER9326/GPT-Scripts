@@ -10,11 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      CR_SOURCE_URL: 'https://sdmntpritalynorth.oaiusercontent.com/files/00000000-1444-8246-9670-dfef48be4cb5/raw?se=2026-09-22T04%3A43%3A15Z&sp=r&sv=2026-02-06&sr=b&scid=9c44b2f9-606c-5016-94da-56d034a35acf&skoid=82a3371f-2f6c-4f81-8a78-2701b362559b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T03%3A54%3A44Z&ske=2026-09-23T03%3A54%3A44Z&sks=b&skv=2026-02-06&sig=0VNDOS/Chs4aS7PIs1F6Fe%2BQUO0YxyrarGaRLYLGg4U%3D'
+      CR_SOURCE_URL: 'https://sdmntpritalynorth.oaiusercontent.com/files/00000000-3b00-8246-a043-1f63d9211627/raw?se=2026-09-22T04%3A46%3A28Z&sp=r&sv=2026-02-06&sr=b&scid=fecea2ec-5d51-5a6a-acaf-9baa08095a17&skoid=82a3371f-2f6c-4f81-8a78-2701b362559b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A39%3A11Z&ske=2026-09-22T21%3A39%3A11Z&sks=b&skv=2026-02-06&sig=oEnScGGM/idM0a/gle510n9a34XNeW2r9ZYZazGETWk%3D'
     steps:
       - uses: actions/checkout@v4
       - name: Audit exact canonical source
-        run: python tmp_cr_runner/audit_canonical.py | tee cr-audit.log
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tmp_cr_runner/audit_canonical.py | tee cr-audit.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
