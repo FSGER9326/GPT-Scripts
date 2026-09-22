@@ -15,46 +15,30 @@ jobs:
     steps:
       - name: Checkout tooling
         uses: actions/checkout@v4
-
-      - name: Download Candidate 03 and Candidate 04 source delta
+      - name: Download Candidate 03
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p downloads work out
-          curl -fL --retry 3 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-a1fc-820a-b68f-97270d5d88d1/raw?se=2026-09-22T01%3A23%3A02Z&sp=r&sv=2026-02-06&sr=b&scid=26c9758a-ea76-566c-baa7-40a6e078914f&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T00%3A06%3A08Z&ske=2026-09-23T00%3A06%3A08Z&sks=b&skv=2026-02-06&sig=GAilk7O/ZFIZ5bqC4ISWqR/F62q%2BRrZk25jxTXaunsw%3D' -o downloads/candidate03.zip
-          curl -fL --retry 3 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-19f4-820a-bb2f-06536682beb7/raw?se=2026-09-22T01%3A23%3A12Z&sp=r&sv=2026-02-06&sr=b&scid=4a88ffc8-b206-5783-ac70-794b222bdf6a&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T21%3A45%3A24Z&ske=2026-09-22T21%3A45%3A24Z&sks=b&skv=2026-02-06&sig=sMXwyd24v3x4aucb95CUUyvMPswK5GjvrMLu3dtBwBQ%3D' -o downloads/procedural-complications-v14.js
-          unzip -q downloads/candidate03.zip -d work
-          test -s downloads/procedural-complications-v14.js
-
-      - name: Inspect Candidate 03 integration seams
+          mkdir -p work out
+          curl -fL --retry 3 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-a1fc-820a-b68f-97270d5d88d1/raw?se=2026-09-22T01%3A23%3A02Z&sp=r&sv=2026-02-06&sr=b&scid=26c9758a-ea76-566c-baa7-40a6e078914f&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-22T00%3A06%3A08Z&ske=2026-09-23T00%3A06%3A08Z&sks=b&skv=2026-02-06&sig=GAilk7O/ZFIZ5bqC4ISWqR/F62q%2BRrZk25jxTXaunsw%3D' -o candidate03.zip
+          unzip -q candidate03.zip -d work
+      - name: Inspect browser QA patterns
         shell: bash
         run: |
           set -euo pipefail
           ROOT=work/cr_proc_route_candidate_03
           {
-            echo '=== build meta ==='
-            cat "$ROOT/build-meta.json"
-            echo '=== rebundle_runtime.py ==='
-            cat "$ROOT/tools/rebundle_runtime.py"
-            echo '=== build_pwa11.py relevant ==='
-            grep -nE 'runtime-bundle|JS_FILES|js_files|src/|precache|buildHash|version' "$ROOT/tools/build_pwa11.py" | head -260 || true
-            echo '=== index runtime tags ==='
-            grep -nE '<script|runtime-bundle|company-foundation|variable-arenas|multistage' "$ROOT/index.html" | tail -120 || true
-            echo '=== company tail ==='
-            tail -90 "$ROOT/src/company/company-foundation-v13-5.js"
-            echo '=== variable arena tail ==='
-            tail -70 "$ROOT/src/missions/variable-arenas-v14.js"
-            echo '=== multistage tail ==='
-            tail -70 "$ROOT/src/missions/multistage-operations-v14.js"
-            echo '=== source module sanity ==='
-            wc -l -c downloads/procedural-complications-v14.js
-            node --check downloads/procedural-complications-v14.js
-          } | tee out/inspection.txt
-
+            echo '=== EGRESS BROWSER ==='
+            cat "$ROOT/tests/pwa12_104_procedural_egress_route_browser.py"
+            echo '=== OPTIONAL BROWSER ==='
+            cat "$ROOT/tests/pwa12_104_procedural_optional_clause_browser.py"
+            echo '=== FACTION BROWSER ==='
+            cat "$ROOT/tests/pwa12_104_procedural_faction_transition_browser.py"
+          } | tee out/browser_patterns.txt
       - name: Upload inspection evidence
         uses: actions/upload-artifact@v4
         with:
-          name: CR-Procedural-C04-Ordering-Inspection
-          path: out/inspection.txt
+          name: CR-Procedural-C04-Browser-Patterns
+          path: out/browser_patterns.txt
           if-no-files-found: error
           retention-days: 7
