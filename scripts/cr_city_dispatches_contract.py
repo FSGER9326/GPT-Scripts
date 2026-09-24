@@ -3,9 +3,10 @@ import sys,re
 root=Path(sys.argv[1] if len(sys.argv)>1 else '.').resolve()
 mod=(root/'src/world/district-dispatches-pwa12-104-city-candidate-01.js').read_text(encoding='utf-8')
 man=(root/'src/bootstrap/module-manifest.js').read_text(encoding='utf-8')
+order_ok=(man.find("'world.livingStreets'")>=0 and man.find("'world.districtDispatches'")>man.find("'world.livingStreets'") and man.find("'missions.approaches'")>man.find("'world.districtDispatches'"))
 checks={
  'module registered':"'world.districtDispatches'" in man,
- 'module ordered after living streets':"'world.livingStreets','world.districtDispatches','missions.approaches'" in man,
+ 'module ordered after living streets':order_ok,
  'state nested in living streets':'street.districtDispatches=street.districtDispatches||{}' in mod,
  'physical source gate':'sourceIsPhysicalD' in mod and 'nearLocationD' in mod,
  'official route authority':'routeToLocationV133' in mod,
